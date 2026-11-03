@@ -49,6 +49,7 @@ test('snapshot lists controls with refs, headings, and clickable divs', async ()
   assert.match(s, /textbox "Name" \[e\d+\]/)
   assert.match(s, /combobox "Type[^"]*" \[e\d+\] \(value="Lounge"\)/)
   assert.match(s, /checkbox "Underfloor heating" \[e\d+\]/)
+  assert.match(s, /checkbox "Fancy option" \[e\d+\]/, 'an invisible native checkbox under a drawn one is listed')
   assert.match(s, /button "Disabled" \[e\d+\] \(disabled\)/)
   assert.match(s, /clickable "A clickable div"/)
   assert.match(s, /combobox "Emitter" \[e\d+\] \(collapsed\)/)
@@ -75,6 +76,11 @@ test('fill, select, check, radio, click by ref, and the result', async () => {
   assert.match(await ok('text', '#note'), /Front lounge \(Kitchen, underfloor\)/)
   assert.match(await ok('snapshot'), /\[status\] Calculated/)
 })
+test('text= finds a field by the name the snapshot showed: a placeholder, a label, an aria-label', async () => {
+  await ok('fill', 'text=Room name', 'By placeholder'); assert.equal(await ok('get', 'value', '#name'), 'By placeholder')
+  await ok('check', 'text=Fancy option'); assert.match(await ok('is', 'checked', '#fancy'), /^yes/)
+  await ok('fill', 'text=Notes', 'by label'); assert.equal(await ok('get', 'value', '#notes'), 'by label')
+})
 test('fill replaces what was there', async () => {
   await ok('fill', '#name', 'Back bedroom')
   assert.equal(await ok('get', 'value', '#name'), 'Back bedroom')
@@ -97,7 +103,7 @@ test('press: Enter in a field, cmd+Enter, and typing into a contenteditable', as
   assert.match(await ok('text', '#note'), /Kitchenette/)
   await ok('press', 'cmd+Enter'); assert.equal(await ok('text', '#status'), 'cmd+Enter')
   await ok('fill', '#editor', 'new words'); assert.equal(await ok('text', '#editor'), 'new words')
-  await ok('click', '#notes'); await ok('type', 'typed here'); assert.equal(await ok('get', 'value', '#notes'), 'typed here')
+  await ok('click', '#notes'); await ok('press', 'End'); await ok('type', 'typed here'); assert.match(await ok('get', 'value', '#notes'), /typed here$/)
   assert.match(await bad('press', 'Bogus'), /unknown key/)
 })
 test('get and is', async () => {

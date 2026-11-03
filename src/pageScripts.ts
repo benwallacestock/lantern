@@ -14,7 +14,8 @@ export const SNAPSHOT_JS = String.raw`
   const lines = []; let n = 0, more = 0
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim()
   const cut = (s, m = 80) => (s.length > m ? s.slice(0, m - 1) + '…' : s)
-  const vis = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; const s = getComputedStyle(el); return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.01 }
+  // An invisible native control (a checkbox at opacity 0 under a drawn one, a file input behind a button) still takes the click.
+  const vis = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; const s = getComputedStyle(el); return s.visibility !== 'hidden' && s.display !== 'none' && (Number(s.opacity) > 0.01 || /^(input|select|textarea|button)$/i.test(el.tagName)) }
   const NATIVE = 'a[href],button,input:not([type=hidden]),select,textarea,summary,[contenteditable=""],[contenteditable=true]'
   const ROLES = ['button','link','textbox','searchbox','combobox','checkbox','radio','switch','slider','spinbutton','tab','menuitem','menuitemcheckbox','menuitemradio','option','treeitem']
   const CONTROL = NATIVE + ',' + ROLES.map((r) => '[role=' + r + ']').join(',')
@@ -84,11 +85,14 @@ export const locateJs = (target: string, scroll = true) => String.raw`
     if (/^e\d+$/.test(t)) { el = (window.__lantern && window.__lantern.refs && window.__lantern.refs.get(t)) || null; if (!el) return { error: 'no element ' + t + ' — refs come from the last snapshot; take a new one' } }
     else if (t.startsWith('text=')) {
       const want = clean(t.slice(5)).toLowerCase()
-      const hits = [...document.body.querySelectorAll('*')].filter((e) => !(e.id && e.id.startsWith('__lantern')) && clean(e.innerText).toLowerCase() === want && e.getBoundingClientRect().width > 0)
+      const all = [...document.body.querySelectorAll('*')].filter((e) => !(e.id && e.id.startsWith('__lantern')) && e.getBoundingClientRect().width > 0)
+      const hits = all.filter((e) => clean(e.innerText).toLowerCase() === want)
       const inner = hits.filter((e) => !hits.some((o) => o !== e && e.contains(o))) // the innermost elements with exactly that text
       // A page title and a tab can read the same. Prefer the one that is something you'd press.
       const pressable = (e) => e.closest('a[href],button,input,select,textarea,summary,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[role=checkbox],[role=radio],[role=switch]') || getComputedStyle(e).cursor === 'pointer'
       el = inner.find(pressable) || inner[0] || null
+      // Nothing reads that: a field named by its placeholder, label, aria-label or title — the name the snapshot showed.
+      if (!el) { const byName = (e) => [e.getAttribute('aria-label'), e.getAttribute('placeholder'), e.getAttribute('title'), e.labels && [...e.labels].map((l) => l.innerText).join(' ')].some((v) => v && clean(v).toLowerCase() === want); el = all.find((e) => e.matches('input,textarea,select,button,[role]') && byName(e)) || null }
       if (!el) return { error: 'nothing on the page reads "' + t.slice(5) + '"' }
     } else { el = document.querySelector(t); if (!el) return { error: 'no element matches ' + t } }
   } catch (e) { return { error: String(e && e.message || e) } }
