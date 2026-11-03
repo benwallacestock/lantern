@@ -4,6 +4,8 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+## 0.1.3 — 2026-11-03
+
 ### Fixed
 - The restart lantern does when a page stops taking input (which still happens after some logins, for reasons that are Chrome's) took the daemon down with it, so the command got no answer; it now carries on, reopens the page the browser was on, and checks twice with time to answer before deciding a page is dead.
 
