@@ -12,10 +12,9 @@ import { Page, SETTLE, type Reply } from './page.ts'
 import { paths } from './paths.ts'
 import { readConfig } from './config.ts'
 
-const root = process.argv[2]
-if (!root) { console.error('usage: daemon.ts <project root>'); process.exit(2) }
-const P = paths(root)
-const CONFIG = readConfig(root)
+let root = ''
+let P: ReturnType<typeof paths>
+let CONFIG: ReturnType<typeof readConfig>
 const IDLE = 30 * 60_000
 /** Commands whose outcome a watcher is told about, in words. */
 const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
@@ -139,6 +138,15 @@ function handle(req: any): Promise<Reply> {
   return r
 }
 
+/** Run the daemon for a project, in this process, until it stops. */
+export async function runDaemon(projectRoot: string) {
+  root = projectRoot; P = paths(root); CONFIG = readConfig(root)
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
+  process.on('uncaughtException', (e) => { console.error('uncaught:', e) })
+  await main().catch((e) => { console.error('could not start:', e); shutdown('failed to start') })
+}
+
 async function main() {
   const bin = findChrome()
   if (!bin) { console.error(NO_CHROME); process.exit(1) }
@@ -169,7 +177,3 @@ async function main() {
   setInterval(() => { if (Date.now() - used > IDLE && !page?.rec && !page?.watchers.size) shutdown('idle for 30 minutes') }, 60_000)
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'))
-process.on('SIGINT', () => shutdown('SIGINT'))
-process.on('uncaughtException', (e) => { console.error('uncaught:', e); })
-main().catch((e) => { console.error('could not start:', e); shutdown('failed to start') })

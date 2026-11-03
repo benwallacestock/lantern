@@ -28,27 +28,27 @@ Each command is a short-lived process. The first one starts a daemon for the pro
 
 ## Install
 
-Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself. The install from GitHub is instant: the built CLI is in the repo.
+Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself. 
 
 ```bash
-npm install -g github:benwallacestock/lantern     # the CLI, straight from this repo; pin a release with #v0.1.0
+npm install -g lantern-browser      # the CLI; or run it without installing: npx -y lantern-browser <command>
 ```
 
-**Claude Code** — the plugin carries the CLI and the skills, so this is the whole install:
+**Claude Code** — the plugin brings the skills that teach Claude when and how to use it:
 
 ```
 /plugin marketplace add benwallacestock/lantern
 /plugin install lantern@lantern
 ```
 
-**Codex** — install the CLI as above, then the skills, with [skills](https://skills.sh) or by hand:
+**Codex** — the same skills, with [skills](https://skills.sh) or by hand:
 
 ```bash
 npx skills add benwallacestock/lantern
 # or: ln -s "$(npm root -g)/lantern-browser/skills/"* ~/.codex/skills/
 ```
 
-**Any other agent** — install the CLI and put the text of `skills/lantern/SKILL.md` where the agent reads its instructions.
+**Any other agent** — put the text of `skills/lantern/SKILL.md` where the agent reads its instructions.
 
 ## What it does
 
@@ -79,7 +79,7 @@ Most projects need none. A `.lantern.json` at the project root, or the same keys
 
 ## How it is put together
 
-- `bin/lantern.ts` — the CLI: finds the project root, talks to the daemon over a unix socket, starts it if it isn't up. From a checkout it runs as TypeScript (Node strips the types); an npm install runs the build in `dist/`, which is committed, since Node won't strip types under `node_modules`. `npm run build` refreshes it, and the release script does so for every release.
+- `bin/lantern.ts` — the CLI: finds the project root, talks to the daemon over a unix socket, starts it if it isn't up. From a checkout it runs as TypeScript (Node strips the types), and it is also the daemon's entry (`lantern __daemon <root>`), so esbuild bundles the whole program into one file for npm.
 - `src/daemon.ts` — one per project: owns the Chrome, the page, and a queue so commands never interleave.
 - `src/cdp.ts` — the DevTools protocol over Chrome's pipe. No dependencies.
 - `src/page.ts` — every command, and the recorder.
@@ -92,4 +92,4 @@ State lives in `~/.lantern` (`LANTERN_HOME` to move it): a profile per project (
 
 ## Releases
 
-Pre-1.0: versions are 0.x and a minor bump may change behaviour. Every change goes under *Unreleased* in [CHANGELOG.md](CHANGELOG.md) as it lands. To cut a release: `npm run release -- 0.2.0` (or `patch`, `minor`, `major`) moves that section under the new version, bumps `package.json`, commits, tags `v0.2.0` and pushes; the release workflow runs the tests and publishes a GitHub Release with those notes. Install a release by its tag: `npm install -g github:benwallacestock/lantern#v0.2.0`.
+Pre-1.0: versions are 0.x and a minor bump may change behaviour. Every change goes under *Unreleased* in [CHANGELOG.md](CHANGELOG.md) as it lands. To cut a release: `npm run release -- 0.2.0` (or `patch`, `minor`, `major`) moves that section under the new version, bumps `package.json`, commits, tags `v0.2.0` and pushes; the release workflow runs the tests, publishes a GitHub Release with those notes, and publishes the package to npm (with an `NPM_TOKEN` secret, or npm's trusted publishing once it is set up for this repository). The package is one bundled file, built by esbuild at publish time; from a checkout the TypeScript runs directly.

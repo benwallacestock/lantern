@@ -11,6 +11,9 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 - Downloads go into `tmp/lantern/downloads/`, named by the server, and the click says so — not into the person's own Downloads folder.
 - A hover survives a screenshot; stills taken while recording leave the caption out.
 
+### Changed
+- Installed from npm as `lantern-browser`: one bundled file built by esbuild at publish time. The release workflow publishes to npm as well as GitHub. The Claude plugin carries the skills; the CLI comes from npm, or runs with `npx -y lantern-browser` uninstalled.
+
 ### Added
 - The snapshot looks inside open shadow roots, lists an open dialog first, names submit buttons by their value and checkboxes by the text beside them, lists iframes, and skips labels in favour of their fields.
 - `text=` also matches a label, placeholder, aria-label or button value; says when several elements match; hints at the nearest text when nothing matches exactly.

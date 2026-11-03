@@ -8,14 +8,14 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findChrome, NO_CHROME } from '../src/chrome.ts'
+import { runDaemon } from '../src/daemon.ts'
 import { paths } from '../src/paths.ts'
 import { USAGE } from '../src/usage.ts'
 
-// This file runs as TypeScript from a checkout (Node strips the types) and as JavaScript from dist/ once built for an
-// npm install: the daemon beside it has the same extension, and package.json is one level further up when built.
+// This file is the whole program: the CLI, and — started by the CLI as `lantern __daemon <root>` — the daemon. It runs
+// as TypeScript from a checkout (Node strips the types) and as one bundled file, dist/lantern.js, from npm.
 const here = fileURLToPath(import.meta.url)
-const DAEMON = path.join(path.dirname(here), '..', 'src', 'daemon' + path.extname(here))
-const PACKAGE = [path.join(path.dirname(here), '..', 'package.json'), path.join(path.dirname(here), '..', '..', 'package.json')].find((f) => fs.existsSync(f))!
+const PACKAGE = path.join(path.dirname(here), '..', 'package.json')
 
 type Reply = { ok: boolean; text: string }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -23,6 +23,7 @@ const die = (msg: string): never => { process.stderr.write(msg + '\n'); process.
 
 const argv = process.argv.slice(2)
 const [cmd, ...rest] = argv
+if (cmd === '__daemon') { await runDaemon(rest[0]); await new Promise(() => {}) } // the daemon: this process stays until it stops itself
 if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') { console.log(USAGE); process.exit(0) }
 
 const cwd = process.cwd()
@@ -65,7 +66,7 @@ async function reapOrphan() {
 function start() {
   fs.mkdirSync(path.dirname(P.log), { recursive: true })
   const log = fs.openSync(P.log, 'a')
-  const child = spawn(process.execPath, [DAEMON, root], { detached: true, stdio: ['ignore', log, log], env: process.env })
+  const child = spawn(process.execPath, [here, '__daemon', root], { detached: true, stdio: ['ignore', log, log], env: process.env })
   child.unref()
   return child
 }

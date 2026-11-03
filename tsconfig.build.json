@@ -1,5 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": false, "outDir": "dist", "declaration": false, "sourceMap": false },
-  "include": ["bin/**/*.ts", "src/**/*.ts"]
-}
