@@ -88,10 +88,11 @@ test('watch over the socket: JSON lines with frames and actions', async () => {
 })
 test('settings in .lantern.json: url, hosts, onLoad', async () => {
   await ok('close'); await pause(300)
-  fs.writeFileSync(path.join(proj, '.lantern.json'), JSON.stringify({ url: app.url, hosts: ['127.0.0.1'], note: 'TEST-1', onLoad: "document.documentElement.dataset.hook = 'ran'" }))
+  fs.writeFileSync(path.join(proj, '.lantern.json'), JSON.stringify({ url: app.url, hosts: ['127.0.0.1'], note: 'TEST-1', accent: '#4cc3ff', onLoad: "document.documentElement.dataset.hook = 'ran'" }))
   try {
     assert.match(await ok('open', '/about'), /About/) // relative, with no page open before: `url` from the settings
     assert.equal(await ok('eval', 'document.documentElement.dataset.hook'), 'ran')
+    assert.equal(await ok('eval', 'getComputedStyle(document.documentElement).getPropertyValue("--lantern-accent").trim()'), '#4cc3ff')
     const other = app.url.replace('127.0.0.1', 'localhost')
     assert.match(await bad('open', other + '/'), /only visits this project's app/)
     await ok('open', '/')

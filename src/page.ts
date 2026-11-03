@@ -12,7 +12,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
-import { BLUE, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { ACCENT_JS, BLUE, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, MARK_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { USAGE } from './usage.ts'
 import { encodeInChrome } from './encode.ts'
 import { hostAllowed, type Config } from './config.ts'
@@ -68,6 +68,7 @@ export class Page {
   lastFrame?: Buffer
   private sentAt = 0
   private screencast = false
+  private cast: 'record' | 'watch' | null = null // what the screencast is tuned for
   currentUrl = 'about:blank'
   private onLoad?: () => void
   private mainFrame = ''
@@ -145,10 +146,10 @@ export class Page {
         // Recording: keep the frame (at most ~12 a second). The page only paints when something changed, so a pause
         // in the agent's thinking leaves a gap in the timestamps, not a run of identical frames.
         const r = this.rec
-        if (r && now <= r.until && now - r.wrote >= 80) { r.wrote = now; const file = path.join(r.dir, `f-${String(r.frames.length).padStart(5, '0')}.jpg`); r.frames.push({ file, t: now }); fs.writeFile(file, jpeg, () => {}) }
-        // Watching: the latest frame to everyone looking, at most ~8 a second.
+        if (r && now <= r.until && now - r.wrote >= 30) { r.wrote = now; const file = path.join(r.dir, `f-${String(r.frames.length).padStart(5, '0')}.jpg`); r.frames.push({ file, t: now }); fs.writeFile(file, jpeg, () => {}) }
+        // Watching: the latest frame to everyone looking, up to ~25 a second (a slow viewer drops frames, see the daemon).
         this.lastFrame = jpeg
-        if (this.watchers.size && now - this.sentAt > 120) { this.sentAt = now; for (const w of this.watchers) w.frame?.(jpeg, this.currentUrl) }
+        if (this.watchers.size && now - this.sentAt >= 40) { this.sentAt = now; for (const w of this.watchers) w.frame?.(jpeg, this.currentUrl) }
         break
       }
       case 'Fetch.requestPaused': {
@@ -183,16 +184,31 @@ export class Page {
     if (this.popups.length > 1) return // one is followed; the rest of a burst are only counted
     if (hostAllowed(this.config.hosts, host)) void this.load(info.url); else this.note(`a link wanted to open ${info.url} in a new tab (not one of this project's hosts, so not followed)`)
   }
+  /** The colour of everything lantern draws: from the settings, or lantern's own orange. */
+  get accent() { return this.config.accent || ORANGE }
   private afterLoad() {
+    if (this.config.accent) this.fire(ACCENT_JS(this.config.accent))
+    if (this.rec && this.config.watermark !== false) this.fire(MARK_JS(true)) // the "made with lantern" mark outlives a navigation
     if (this.rec?.caption) this.fire(CAPTION_JS(this.rec.caption)) // a caption outlives a navigation
     if (this.at) this.fire(CURSOR_JS(this.at.x, this.at.y)) // so does the pointer
     if (this.config.onLoad) this.fire(this.config.onLoad) // the project's own after-load script: a dev login, say
   }
   /** Tell whoever is watching what just happened, in words — 'clicked "Save changes"' — not the command as typed. */
   did(text: string) { for (const w of this.watchers) w.did?.(text) }
-  /** Frames flow while recording or while someone watches; the screencast is one stream shared by both. */
-  async wantFrames() { if (this.screencast) return; this.screencast = true; await this.cdp('Page.startScreencast', { format: 'jpeg', quality: 82, maxWidth: 2880, maxHeight: 1800, everyNthFrame: 1 }) }
-  async doneWithFrames() { if (!this.screencast || this.rec || this.watchers.size) return; this.screencast = false; await this.cdp('Page.stopScreencast').catch(() => {}) }
+  /** Frames flow while recording or while someone watches; the screencast is one stream shared by both, tuned for the
+   * recording when there is one (full 2x, for the video) and lighter otherwise (1x, so a viewer sees it move). */
+  async wantFrames() {
+    const mode = this.rec ? 'record' : 'watch'
+    if (this.screencast && this.cast === mode) return
+    if (this.screencast) await this.cdp('Page.stopScreencast').catch(() => {})
+    this.screencast = true; this.cast = mode
+    await this.cdp('Page.startScreencast', mode === 'record' ? { format: 'jpeg', quality: 82, maxWidth: 2880, maxHeight: 1800, everyNthFrame: 1 } : { format: 'jpeg', quality: 70, maxWidth: 1440, maxHeight: 900, everyNthFrame: 1 })
+  }
+  async doneWithFrames() {
+    if (!this.screencast) return
+    if (this.rec || this.watchers.size) { await this.wantFrames(); return } // still needed: retune for whoever is left
+    this.screencast = false; this.cast = null; await this.cdp('Page.stopScreencast').catch(() => {})
+  }
 
   /** If something set a navigation going, wait for the new page (a form's redirect, a followed link) before reading it. */
   async settle(ms = 10_000) {
@@ -216,6 +232,7 @@ export class Page {
     await sleep(400)
     if (this.config.onLoad) for (let i = 0; i < 20 && (await this.evaluate<boolean>('!!document.querySelector("input[type=password]")').catch(() => false)); i++) await sleep(300) // the after-load script may be logging in
     if (/^https?:/.test(url)) { this.base = new URL(url).origin; this.lastUrl = url; this.saveState() }
+    if (this.config.accent) await this.evaluate(ACCENT_JS(this.config.accent)).catch(() => {})
   }
   /** A fresh daemon (after an idle stop, or Chrome dying) puts the last page back before the first command that needs one. */
   private async restoreIfBlank() {
@@ -254,7 +271,7 @@ export class Page {
     const at = await this.spot(target)
     await this.moveMouse(at.x, at.y)
     if (this.rec) { // the ring and the word, as the click lands
-      const color = button === 'right' ? BLUE : ORANGE
+      const color = button === 'right' ? BLUE : this.accent
       this.fire(CLICK_JS(at.x, at.y, color))
       this.hud(`mouse(${at.x}, ${at.y}, ${JSON.stringify(button)}, ${JSON.stringify(color)}, ${times})`)
     }
@@ -282,14 +299,14 @@ export class Page {
     const a = await this.spot(from) // …then the page is left where `from` is on screen
     const b = await this.spot(to, false) // and `to` is found where it is now, without scrolling `from` away
     await this.moveMouse(a.x, a.y)
-    this.hud(`hold(${a.x}, ${a.y}, '${ORANGE}')`)
+    this.hud(`hold(${a.x}, ${a.y}, '${this.accent}')`)
     await this.press(a.x, a.y, 'mousePressed')
     const steps = 8
     for (let i = 1; i <= steps; i++) { const x = a.x + ((b.x - a.x) * i) / steps, y = a.y + ((b.y - a.y) * i) / steps; await this.moveMouse(x, y, { buttons: 1, settle: this.rec ? 90 : 60 }); this.hud(`move(${x}, ${y})`) }
     await sleep(150)
     await this.press(b.x, b.y, 'mouseReleased')
     this.hud('release()')
-    if (this.rec) this.fire(CLICK_JS(b.x, b.y))
+    if (this.rec) this.fire(CLICK_JS(b.x, b.y, this.accent))
     return `${a.name} → ${b.name}`
   }
   /** The element the last locate found, as a remote object — for CDP calls that take a node (file inputs). */
@@ -451,7 +468,27 @@ export class Page {
       }
       case 'scroll': {
         const dir = rest[0]
-        if (dir === 'to' && rest[1]) { const at = await this.spot(rest.slice(1).join(' '), true, true); await this.moveMouse(at.x, at.y, { settle: 150 }); return { ok: true, text: `scrolled "${at.name}" into view${this.several(at)}` } }
+        if (dir === 'to' && rest[1]) {
+          const target = rest.slice(1).join(' ')
+          if (this.rec) { // the viewer should see the page scroll there, wheel pill and all, not find it already there
+            const far = await this.spot(target, false, true).catch(() => null)
+            if (far) {
+              const [cw, ch] = this.size
+              const dy = Math.round(far.y - ch / 2)
+              if (Math.abs(dy) > 40) {
+                const at = { x: cw / 2, y: ch / 2 }
+                await this.moveMouse(at.x, at.y, { settle: 120 })
+                const way = dy > 0 ? 'down' : 'up'
+                this.hud(`wheel(${at.x}, ${at.y}, ${JSON.stringify(way)})`)
+                const ticks = Math.min(24, Math.max(8, Math.round(Math.abs(dy) / 60)))
+                let done = 0
+                for (let i = 1; i <= ticks; i++) { const t = i / ticks, goal = Math.round(Math.abs(dy) * (1 - Math.pow(1 - t, 3))), step = goal - done; done = goal; if (step) await this.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: at.x, y: at.y, deltaX: 0, deltaY: (dy > 0 ? 1 : -1) * step }); await sleep(32) }
+                await sleep(300)
+              }
+            }
+          }
+          const at = await this.spot(target, true, true); await this.moveMouse(at.x, at.y, { settle: 150 }); return { ok: true, text: `scrolled "${at.name}" into view${this.several(at)}` }
+        }
         const d = { down: [0, 1], up: [0, -1], right: [1, 0], left: [-1, 0] }[dir ?? '']
         if (!d) return { ok: false, text: 'usage: lantern scroll <down|up|left|right> [px] [at <target>], or scroll to <target>' }
         if (rest[1] && rest[1] !== 'at' && !/^\d+$/.test(rest[1])) return { ok: false, text: `scroll how far? ${rest[1]} is not a number of pixels` }
@@ -582,6 +619,7 @@ export class Page {
       await this.setSize(rw, rh)
       await sleep(400) // let the page lay out at that size before the first frame
       this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity }
+      if (this.config.watermark !== false) await this.evaluate(MARK_JS(true)).catch(() => {})
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
@@ -600,7 +638,7 @@ export class Page {
       const r = this.rec; if (!r) return { ok: false, text: 'not recording' }
       this.rec = undefined
       this.hl = false
-      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false)).catch(() => {})
+      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false) + ';' + MARK_JS(false)).catch(() => {})
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
@@ -626,7 +664,7 @@ export class Page {
         const list = r.frames.map((f, i) => `file '${f.file.replace(/'/g, "'\\''")}'\nduration ${durs[i].toFixed(3)}`).join('\n') + `\nfile '${r.frames[r.frames.length - 1].file}'\n`
         const listFile = path.join(r.dir, 'list.txt'); fs.writeFileSync(listFile, list)
         out = `${base}.mp4`
-        const log = await tryOut(ffmpegBin(), ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '30', '-movflags', '+faststart', out])
+        const log = await tryOut(ffmpegBin(), ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '24', '-movflags', '+faststart', out])
         if (!fs.existsSync(out)) return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.slice(-300)}` : ''} (frames kept in ${r.dir})` }
       } else {
         // No ffmpeg: Chrome encodes it, in real time — as long as the clip is.

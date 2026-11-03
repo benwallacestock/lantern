@@ -49,6 +49,7 @@ test('frame: one picture, a pair, options', async () => {
   out = await ok('frame', a, b, '--title=Before and after'); f = firstLine(out); const pair = pngSize(f); assert.ok(pair.h > one.h * 1.8, 'landscape pair stacks')
   out = await ok('frame', a, b, '--side', '--title', 'Side'); f = firstLine(out); assert.ok(pngSize(f).w > pair.w * 1.8, 'side by side is wider')
   out = await ok('frame', a, '--out', 'my.png'); assert.ok(fs.existsSync(path.join(proj, 'my.png'))); assert.match(out, /untitled/)
+  out = await ok('frame', a, '--title', 'With my footer', '--footer', 'Just my words'); assert.ok(fs.existsSync(firstLine(out)))
   assert.match(await bad('frame'), /give a screenshot/)
   assert.match(await bad('frame', 'nope.png'), /no such image/)
 })

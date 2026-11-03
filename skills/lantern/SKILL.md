@@ -72,14 +72,14 @@ gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'
 - Always give `--title`: it is drawn into the frame as its heading, so the image says what it shows wherever it ends up (the PR, Slack, a ticket). Say what the pair is of ("Checkout totals"), not "before and after".
 - Take the "before" first, on the base branch or before applying the change, so the pair really is a pair. Same `size` for both.
 - When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h` in viewport pixels. The whole page when the change is the page; `--full` for a page longer or wider than the screen. Don't crop by hand: the frame is the crop. Screenshots and highlights scroll the target into view; for a picture from the top, `lantern scroll to body` first. Pictures are 2x (a 1440×900 viewport gives a 2880×1800 PNG), the size a PR wants.
-- `--captions "Old|New"` to name the panels; `--note "SPR-123"` for the footer; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override).
+- `--captions "Old|New"` to name the panels; `--note "SPR-123"` adds to the footer, `--footer "…"` replaces it; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override). The title carries a small lantern glyph in the accent colour.
 - Never commit anything from `tmp/lantern/`.
 
 For a change a still can't show — a drag, a flow across pages, something animating — record a demo: see the `lantern-demo-video` skill.
 
 ## Settings
 
-Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_OUT`, `LANTERN_NOTE`, `LANTERN_ON_LOAD` in the environment) sets: `url`, where paths resolve before any page is open; `hosts`, the only hosts the page may visit; `out`, where pictures go; `note`, a word for the frame's footer; `onLoad`, JavaScript run after every load (a dev login, say). If `open` says the browser only visits this project's hosts, that is the project's choice: stay on them.
+Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_OUT`, `LANTERN_NOTE`, `LANTERN_FOOTER`, `LANTERN_ACCENT`, `LANTERN_WATERMARK`, `LANTERN_ON_LOAD` in the environment) sets: `url`, where paths resolve before any page is open; `hosts`, the only hosts the page may visit; `out`, where pictures go; `note` and `footer`, for the frame; `accent`, the colour of highlights, rings and the glyph (lantern's orange by default); `watermark: false` to leave the "made with lantern" mark off videos; `onLoad`, JavaScript run after every load (a dev login, say). If `open` says the browser only visits this project's hosts, that is the project's choice: stay on them.
 
 ## What it can't do
 

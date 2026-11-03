@@ -71,11 +71,14 @@ Most projects need none. A `.lantern.json` at the project root, or the same keys
   "hosts": ["localhost"],
   "out": "tmp/lantern",
   "note": "SPR-123",
+  "footer": "Acme · internal",
+  "accent": "#4cc3ff",
+  "watermark": false,
   "onLoad": "/* JavaScript run in the page after every load — a dev login, say */"
 }
 ```
 
-`url` is where relative paths go before any page has been opened. `hosts` keeps the page on your app: a navigation anywhere else fails and is noted in `lantern console`. `out` moves the pictures. `note` goes in the frame's footer. `onLoad` runs after each load, which is how forest logs its agent in as the dev user. `LANTERN_CHROME` and `LANTERN_FFMPEG` point at those binaries; `LANTERN_HOME` moves lantern's own state (default `~/.lantern`).
+`url` is where relative paths go before any page has been opened. `hosts` keeps the page on your app: a navigation anywhere else fails and is noted in `lantern console`. `out` moves the pictures. `note` goes in the frame's footer and `footer` replaces it. `accent` recolours everything lantern draws. `watermark: false` leaves the small "made with lantern" off recordings. `onLoad` runs after each load, which is how forest logs its agent in as the dev user. `LANTERN_CHROME` and `LANTERN_FFMPEG` point at those binaries; `LANTERN_HOME` moves lantern's own state (default `~/.lantern`).
 
 ## How it is put together
 

@@ -20,7 +20,7 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern screenshot [target|x,y,w,h] [--crop] [--full]     prints a PNG path, at 2x. With a target: the page with it glowing;
                               --crop for just the element; --full for the whole page, however long or wide
   lantern highlight <target>    a glowing box around an element, in screenshots and recordings; highlight off ends it
-  lantern frame <shot.png> [after.png …] --title "what it shows" [--captions "Before|After"] [--note "ABC-123"] [--out f.png] [--side|--stack]
+  lantern frame <shot.png> [after.png …] --title "what it shows" [--captions "Before|After"] [--note "ABC-123"] [--footer "…"] [--out f.png] [--side|--stack]
                               one PNG, framed for a pull request: one picture, a before/after pair, or numbered steps
 
   lantern record start          start recording a demo: every change the page paints, from now
@@ -32,4 +32,5 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
 
 Pictures, videos and downloads go in <project>/tmp/lantern. Needs a Chrome (or LANTERN_CHROME=…); ffmpeg is optional for video.
 Settings, in the environment or a .lantern.json at the project root: url (where paths resolve), hosts (the only hosts
-the page may visit), out (where pictures go), note (for the frame's footer), onLoad (JavaScript to run after each load).`
+the page may visit), out (where pictures go), note and footer (for the frame), accent (the colour of what lantern draws),
+watermark (false to drop the "made with lantern" mark from videos), onLoad (JavaScript to run after each load).`

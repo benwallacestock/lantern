@@ -107,9 +107,9 @@ async function main() {
     }
     req = { cmd }
   } else if (cmd === 'frame') {
-    const images: string[] = []; let title: string | undefined, captions: string[] | undefined, out: string | undefined, layout: 'side' | 'stack' | undefined, scale: number | undefined, note: string | undefined
+    const images: string[] = []; let title: string | undefined, captions: string[] | undefined, out: string | undefined, layout: 'side' | 'stack' | undefined, scale: number | undefined, note: string | undefined, footer: string | undefined
     // --flag value and --flag=value both work (agents reach for either).
-    const flat = rest.flatMap((a) => (/^--(title|captions|out|scale|note)=/.test(a) ? [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)] : [a]))
+    const flat = rest.flatMap((a) => (/^--(title|captions|out|scale|note|footer)=/.test(a) ? [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)] : [a]))
     for (let i = 0; i < flat.length; i++) {
       const a = flat[i]
       if (a === '--title') title = flat[++i]
@@ -118,10 +118,11 @@ async function main() {
       else if (a === '--side' || a === '--stack') layout = a.slice(2) as 'side' | 'stack'
       else if (a === '--scale') scale = Number(flat[++i]) || undefined
       else if (a === '--note') note = flat[++i]
+      else if (a === '--footer') footer = flat[++i]
       else images.push(path.resolve(cwd, a))
     }
     if (!images.length) die('lantern frame: give a screenshot to frame (from `lantern screenshot`), or two for a before/after')
-    req = { cmd: 'frame', images, title, captions, out, layout, scale, note, branch: git('rev-parse', '--abbrev-ref', 'HEAD') || undefined, cwd }
+    req = { cmd: 'frame', images, title, captions, out, layout, scale, note, ...(footer !== undefined ? { footer } : {}), branch: git('rev-parse', '--abbrev-ref', 'HEAD') || undefined, cwd }
   } else {
     req = { cmd: 'browser', args: argv, cwd }
   }

@@ -18,6 +18,9 @@ let CONFIG: ReturnType<typeof readConfig>
 const IDLE = 30 * 60_000
 /** Commands whose outcome a watcher is told about, in words. */
 const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
+/** Commands a recording keeps rolling for: things that happen on the page. A snapshot or a text read between
+ * steps is the agent looking, not the user doing, and is cut from the video like any other thinking. */
+const RECORDS = new Set([...ACTS, 'record'])
 
 let chrome: Chrome | undefined
 let page: Page | undefined
@@ -55,14 +58,15 @@ async function dispatch(req: any): Promise<Reply> {
   switch (req.cmd) {
     case 'status': return { ok: true, text: `lantern is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}` }
     case 'close': await stop('asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
-    case 'frame': return frame(chrome!, { note: CONFIG.note, ...req }, P.out)
+    case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, ...req }, P.out)
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
     case 'browser': {
       const p = await thePage()
       const args: string[] = req.args ?? []
-      if (p.rec) p.rec.until = Infinity // frames are kept while a command runs…
+      const rolling = RECORDS.has(args[0])
+      if (p.rec && rolling) p.rec.until = Infinity // frames are kept while an action runs…
       try { const r = await p.run(args[0], args.slice(1), req.cwd ?? root); if (r.ok && ACTS.has(args[0])) p.did(r.text.split('\n')[0].slice(0, 90)); if (p.dead && !p.rec) { const note = await relaunch(); return { ...r, text: note + r.text } } return r }
-      finally { if (p.rec) p.rec.until = Date.now() + SETTLE } // …and for a beat after, while the page settles
+      finally { if (p.rec && rolling) p.rec.until = Date.now() + SETTLE } // …and for a beat after, while the page settles
     }
     default: return { ok: false, text: `lantern does not know that request (${req.cmd})` }
   }
@@ -91,7 +95,7 @@ async function relaunch(): Promise<string> {
 /** A watcher over the socket (forest's panel, say): JSON lines — {frame, url} as the page paints, {did} as commands land. */
 async function watch(conn: net.Socket) {
   const p = await thePage()
-  const w = { frame: (jpeg: Buffer, url: string) => { if (!conn.destroyed) conn.write(JSON.stringify({ frame: jpeg.toString('base64'), url }) + '\n') }, did: (text: string) => { if (!conn.destroyed) conn.write(JSON.stringify({ did: text }) + '\n') } }
+  const w = { frame: (jpeg: Buffer, url: string) => { if (!conn.destroyed && conn.writableLength < 1_500_000) conn.write(JSON.stringify({ frame: jpeg.toString('base64'), url }) + '\n') }, did: (text: string) => { if (!conn.destroyed) conn.write(JSON.stringify({ did: text }) + '\n') } }
   p.watchers.add(w)
   await p.wantFrames()
   if (p.lastFrame) w.frame(p.lastFrame, p.currentUrl)
@@ -108,22 +112,41 @@ function previewUrl(): Promise<string> {
     const p = await thePage()
     if (req.url === '/stream') {
       res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
-      const send = (jpeg: Buffer) => { if (!res.destroyed) res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`), res.write(jpeg), res.write('\r\n') }
+      const send = (jpeg: Buffer) => { if (res.destroyed || res.writableLength > 1_500_000) return; res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`); res.write(jpeg); res.write('\r\n') }
       const w = { frame: send }
       p.watchers.add(w); await p.wantFrames()
       if (p.lastFrame) send(p.lastFrame)
       req.on('close', () => { p.watchers.delete(w); void p.doneWithFrames() })
     } else if (req.url === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
-      const w = { did: (text: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ did: text, url: p.currentUrl })}\n\n`) }, frame: (_j: Buffer, url: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ url })}\n\n`) } }
+      let last = p.currentUrl
+      const w = { did: (text: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ did: text, url: p.currentUrl })}\n\n`) }, frame: (_j: Buffer, url: string) => { if (!res.destroyed && url !== last) { last = url; res.write(`data: ${JSON.stringify({ url })}\n\n`) } } }
       p.watchers.add(w)
       res.write(`data: ${JSON.stringify({ url: p.currentUrl })}\n\n`)
       req.on('close', () => { p.watchers.delete(w) })
     } else {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(`<!doctype html><meta charset="utf-8"><title>lantern · ${root.split('/').pop()}</title>
-<style>html,body{margin:0;height:100%;background:#16161a;color:#e8e8ee;font:13px -apple-system,system-ui,sans-serif}body{display:flex;flex-direction:column}img{flex:1;min-height:0;object-fit:contain;background:#000}#bar{display:flex;gap:16px;align-items:center;padding:8px 14px;border-top:1px solid #2a2a30}#dot{width:8px;height:8px;border-radius:50%;background:#ff7a2f;box-shadow:0 0 10px rgba(255,122,47,.8)}#did{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#url{color:#8a8a95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}</style>
-<img src="/stream" alt="the page lantern is driving"><div id="bar"><span id="dot"></span><span id="did">watching — frames arrive as the page changes</span><span id="url"></span></div>
+      const name = root.split('/').pop()
+      res.end(`<!doctype html><meta charset="utf-8"><title>lantern · ${name}</title>
+<style>
+html,body{margin:0;height:100%;background:#16161a;color:#e8e8ee;font:13px -apple-system,system-ui,sans-serif}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #26262c;background:#1b1b20}
+header svg{width:22px;height:22px;flex:none}
+header b{font-size:14px;letter-spacing:.01em}
+header .name{color:#8a8a95}
+header .live{margin-left:auto;display:flex;align-items:center;gap:7px;color:#8a8a95;font-size:12px}
+header .live i{width:8px;height:8px;border-radius:50%;background:#ff7a2f;box-shadow:0 0 10px rgba(255,122,47,.8);display:inline-block;animation:p 1.6s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
+main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(255,122,47,.08),transparent 60%),#0f0f12}
+img{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,.6);border-radius:4px}
+footer{display:flex;gap:14px;align-items:center;padding:8px 14px;border-top:1px solid #26262c;background:#1b1b20}
+#did{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#url{color:#8a8a95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+</style>
+<header><svg viewBox="0 0 256 256" aria-hidden="true"><rect width="256" height="256" rx="56" fill="#16161a"/><circle cx="128" cy="146" r="92" fill="#ff7a2f" opacity=".25"/><path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="8" stroke-linecap="round"/><path d="M90 76 L166 76 L158 60 L98 60 Z" fill="#e8e8ee"/><rect x="84" y="74" width="88" height="12" rx="5" fill="#e8e8ee"/><rect x="92" y="86" width="72" height="92" rx="12" fill="#ff7a2f" fill-opacity=".7" stroke="#e8e8ee" stroke-width="8"/><path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="#fff1c2"/><rect x="84" y="178" width="88" height="14" rx="6" fill="#e8e8ee"/><rect x="100" y="192" width="56" height="10" rx="4" fill="#c9c9d2"/></svg><b>lantern</b><span class="name">${name}</span><span class="live"><i></i>live</span></header>
+<main><img src="/stream" alt="the page lantern is driving"></main>
+<footer><span id="did">watching — the picture moves as the page changes</span><span id="url">${p.currentUrl}</span></footer>
 <script>const es=new EventSource('/events');es.onmessage=(e)=>{const d=JSON.parse(e.data);if(d.did)document.getElementById('did').textContent=d.did;if(d.url)document.getElementById('url').textContent=d.url}</script>`)
     }
   })

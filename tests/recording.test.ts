@@ -19,6 +19,7 @@ test('record a demo', async () => {
   assert.match(await ok('record', 'start'), /recording at 1440×900/)
   assert.match(await bad('record', 'start'), /already recording/)
   assert.match(await bad('size', 'phone'), /fixed while recording/)
+  assert.equal(await ok('eval', '!!document.getElementById("__lantern_mark")'), 'true', 'the mark is on while recording')
   await ok('record', 'caption', 'Name the room')
   await ok('fill', '#name', 'Demo walk')
   await ok('record', 'caption', 'Estimate')
@@ -32,6 +33,7 @@ test('record a demo', async () => {
   const p = await probe(f)
   if (p) { assert.match(p, /width=1920/); assert.match(p, /height=1200/); assert.ok(duration(p) >= 7.5, `captions hold: ${duration(p)}s`) } // three caption segments × 2.5s at least
   assert.ok(!fs.existsSync(path.dirname(f) + '/' + path.basename(f, '.mp4').replace('demo-', 'rec-')), 'frames folder removed')
+  assert.equal(await ok('eval', '!!document.getElementById("__lantern_mark")'), 'false', 'the mark goes with the recording')
   assert.match(await bad('record', 'stop'), /not recording/)
   assert.match(await bad('record', 'caption', 'x'), /not recording/)
 })
