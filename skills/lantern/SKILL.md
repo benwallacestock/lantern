@@ -19,7 +19,7 @@ lantern snapshot              # what's on the page you can act on; each control 
 lantern click e12             # or: click "text=Save changes", a CSS selector, or 815,520 for a spot on a canvas
 lantern fill e7 "Heat pump"   # clicks the field and types over what's in it, key by key
 lantern press Enter           # or Escape, Tab, ArrowDown, a character, cmd+a, shift+Tab, ctrl+Enter
-lantern text                  # the page's visible text, to confirm what it now says (or `text .selector` for one part)
+lantern text                  # the page's visible text, to confirm what it now says (or `text .selector`: every match, separated by ---)
 lantern screenshot            # prints a PNG path: open that file with your image tool and look at it
 ```
 
@@ -31,25 +31,29 @@ lantern scroll down 500 · scroll up · scroll down 400 at e12 · scroll to e12
 lantern type "free text"      # into whatever has focus — a canvas, an editor
 lantern select e7 "Heat pump" · check e9 · uncheck e9 · upload e4 ./tmp/photo.jpg
 lantern get text|value|attr <name>|count|box <target> · is visible|enabled|checked <target>   # read or check one thing
-lantern wait 1500 · wait "Saved"   # a pause, or until that text is on the page (10s at most)
+lantern wait 1500 · wait "Saved"   # a pause (30s at most), or until that text is on the page (10s at most)
 lantern url · back · reload · console [--clear] · eval <js>
-lantern size phone            # or tablet, laptop, desktop (1440×900), wide, or 1200x800 — held until changed
+lantern size phone            # or tablet, laptop, desktop (1440×900, the start), wide, or 1200x800 — held until changed
 lantern status · close        # is it up; close the browser (it closes itself after 30 minutes idle)
 ```
 
-**Targets.** A ref from the last snapshot (`e12`), `text=Exact label` (case-insensitive, whole text of the element), a CSS selector, or `x,y` in page pixels for a canvas. Refs are gone after a navigation or a reload: take a new snapshot. `text=` and selectors always work. Quote targets with spaces: `"text=Save changes"`.
+**Targets.** A ref from the last snapshot (`e12`), `text=Name` (case-insensitive; the whole visible text of an element, or the name the snapshot showed for it: a label, placeholder, aria-label or button value), a CSS selector, or `x,y` in viewport pixels for a canvas. Every snapshot renumbers refs, and they die with a navigation or reload: re-read before reusing a number. `text=` and selectors always work, and reach inside open shadow roots. Quote targets with spaces: `"text=Save changes"`. When several elements read the same, lantern uses the first that looks pressable and says so; a selector picks another. If something is in front of the target (an overlay, a modal's backdrop), the click is refused and the thing in front is named: close it first.
 
-**Custom controls.** A dropdown that is not a `<select>`: click it, snapshot, click the option. A date picker, a combobox, a menu: the same. `select` is only for a real `<select>`; it tells you if the element is not one.
+**The snapshot** lists controls, headings, dialogs and alerts, not prose: read results with `text` or `get text`. An open dialog is listed first, with the page behind it after. Names come from the label, placeholder, aria-label, button text or value; a control with no name shows `""`. Labels aren't listed separately: fill the field they label.
+
+**Custom controls.** A dropdown that is not a `<select>`: click it, snapshot, click the option. A combobox, a menu: the same. `select` is only for a real `<select>` (several options at once for a multi-select); it tells you if the element is not one. `fill` sets a date, time, range or colour input directly, in the form the input wants (2026-01-15, #ff0000, a number in range), and refuses buttons and links. Keys: `press` takes Enter, Tab, Escape, arrows, F1–F12, a character, or combinations like `cmd+a`, `shift+Tab`, `cmd++`; characters carry a proper key code, so app shortcuts work.
 
 **Waiting.** After an action that loads or fetches, `lantern wait "text that should appear"` rather than a fixed sleep. A snapshot that says `(nothing to act on)` usually means the page is still loading. Clicks that submit a form or follow a link wait for the new page themselves.
 
-**Reading results.** `lantern text` is cheaper than a screenshot and tells you exactly what the page says. `lantern console` after an interaction lists console warnings and errors, uncaught exceptions, failed requests and dialogs that were dismissed: the errors a screenshot hides. Check it before declaring a flow works.
+**Reading results.** `lantern text` is cheaper than a screenshot and tells you exactly what the page says (code shown in a textarea, as on GitHub, is in `get value` instead). `lantern console` lists console warnings and errors, uncaught exceptions, failed requests with their URLs, dialogs that were dismissed and files downloaded; it accumulates across pages, so `lantern console --clear` before a flow and `lantern console` after it shows just that flow's problems. Check it before declaring a flow works. Commands verify their result where they can: `check` says if the box didn't change, `fill` says if focus was stolen while typing, `click` says if a file was downloaded (into `tmp/lantern/downloads/`) or a new tab was opened in place.
 
-**Dialogs and tabs.** `alert`, `confirm` and `beforeunload` dialogs are accepted for you and noted in `console`. A link that opens a new tab is opened in the same page instead, and the click's output says so.
+**Dialogs, tabs and frames.** `alert`, `confirm` and `beforeunload` dialogs are accepted for you (a `prompt` with an empty answer) and noted in `console`. A link that opens a new tab is opened in the same page instead, and the click's output says so. The snapshot lists an iframe but doesn't look inside it, and `text`/`wait` don't either: click into the frame and `type`, or `eval` its `contentDocument`. A page built of `<frame>`s shows as such. HTTP basic auth can't be answered at the prompt: put the credentials in the URL.
 
 **Logging in.** lantern has no account of its own. If the app shows a login form, log in the way a person would — `fill` the fields, `click` the button — with the project's dev credentials (from its seed data, its README, or the person). Logins persist: the project's browser profile and its cookies survive between sessions. Never put a real credential for another service into the page. Projects that want it automatic set an `onLoad` script in `.lantern.json` (see Settings).
 
 **When to use it.** Whenever you change something a person sees: open the page and look before you say it works. When the person asks to see, check, try or be shown something in the browser, this is the browser: don't go looking for another (Playwright, a browser extension, a desktop browser pane). To let the person watch what you are doing live, run `lantern watch` once: it prints a URL (and opens it) showing the page as you drive it, with a line saying what you just did. Mention the URL to them.
+
+**If a command says it worked but the page didn't change**, that is the one thing to be suspicious of. lantern checks for it after a navigation and restarts its browser itself when it happens (the output says so). If you see it otherwise: `lantern close`, then open the page again; the login survives.
 
 ## Pictures for a pull request
 
@@ -67,7 +71,7 @@ gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'
 
 - Always give `--title`: it is drawn into the frame as its heading, so the image says what it shows wherever it ends up (the PR, Slack, a ticket). Say what the pair is of ("Canvas and device symbols"), not "before and after".
 - Take the "before" first, on the base branch or before applying the change, so the pair really is a pair. Same `size` for both.
-- When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h`. The whole page when the change is the page; `--full` for a page longer than the screen. Don't crop by hand: the frame is the crop.
+- When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h` in viewport pixels. The whole page when the change is the page; `--full` for a page longer or wider than the screen. Don't crop by hand: the frame is the crop. Screenshots and highlights scroll the target into view; for a picture from the top, `lantern scroll to body` first. Pictures are 2x (a 1440×900 viewport gives a 2880×1800 PNG), the size a PR wants.
 - `--captions "Old|New"` to name the panels; `--note "SPR-123"` for the footer; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override).
 - Never commit anything from `tmp/lantern/`.
 
@@ -80,9 +84,9 @@ Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`
 ## What it can't do
 
 - One page at a time, no tabs. A new tab is opened in place.
-- The snapshot doesn't look inside iframes; `eval` can, or open the frame's URL directly.
-- HTML5 drag-and-drop (dragstart/drop) may not fire from `drag`; pointer-driven dragging (mousedown/mousemove/mouseup) does.
-- It does not see your own browser's logins; log in once in lantern.
+- The snapshot, `text` and `wait` don't look inside iframes; click into the frame and type, or `eval` its `contentDocument`.
+- Permission prompts (geolocation, notifications) are not answered.
+- It does not see your own browser's logins; log in once in lantern. Windows is not supported yet.
 
 ## If something is wrong
 
@@ -91,4 +95,4 @@ Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`
 - `did not load`: nothing answers at that URL. Start the app, or check the port.
 - `no element e12 — refs come from the last snapshot`: the page changed; snapshot again.
 - `lantern could not start`: its log is named in the message. Node must be 22.18 or newer.
-- Something odd: `lantern status`, then `lantern close` and start again.
+- `lantern status` names the daemon's log; `lantern close` stops it, even one that lost its socket. Something odd: `lantern close` and open the page again.

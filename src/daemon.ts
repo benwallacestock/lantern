@@ -30,13 +30,14 @@ const stamp = () => new Date().toISOString().slice(11, 19)
 const log = (...a: unknown[]) => console.log(stamp(), ...a)
 
 let stopping: Promise<void> | undefined
+let owned = false // the socket and pid file are ours to remove only once we have written them
 /** Stop taking commands, close Chrome and wait for it to let go of the profile, so the next daemon can start at once. */
 function stop(why: string): Promise<void> {
   if (stopping) return stopping
   log('shutting down:', why)
   try { server?.close() } catch {}
   try { preview?.close() } catch {}
-  try { fs.rmSync(P.sock, { force: true }); fs.rmSync(P.pid, { force: true }) } catch {}
+  try { if (owned) { fs.rmSync(P.sock, { force: true }); fs.rmSync(P.pid, { force: true }) } } catch {}
   stopping = (async () => {
     // Keep the login: cookies go to the profile folder (readable by this user only) and come back next start.
     if (page) { try { fs.writeFileSync(path.join(P.profile, 'cookies.json'), JSON.stringify(await page.cookiesOut()), { mode: 0o600 }) } catch (e) { log('could not save cookies:', (e as Error).message) } }
@@ -53,7 +54,7 @@ function shutdown(why: string) { void stop(why).then(() => setTimeout(() => proc
 
 async function dispatch(req: any): Promise<Reply> {
   switch (req.cmd) {
-    case 'status': return { ok: true, text: `lantern is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}` }
+    case 'status': return { ok: true, text: `lantern is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}` }
     case 'close': await stop('asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
     case 'frame': return frame(chrome!, { note: CONFIG.note, ...req }, P.out)
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
@@ -61,7 +62,7 @@ async function dispatch(req: any): Promise<Reply> {
       const p = await thePage()
       const args: string[] = req.args ?? []
       if (p.rec) p.rec.until = Infinity // frames are kept while a command runs…
-      try { const r = await p.run(args[0], args.slice(1), req.cwd ?? root); if (r.ok && ACTS.has(args[0])) p.did(r.text.split('\n')[0].slice(0, 90)); return r }
+      try { const r = await p.run(args[0], args.slice(1), req.cwd ?? root); if (r.ok && ACTS.has(args[0])) p.did(r.text.split('\n')[0].slice(0, 90)); if (p.dead && !p.rec) { const note = await relaunch(); return { ...r, text: note + r.text } } return r }
       finally { if (p.rec) p.rec.until = Date.now() + SETTLE } // …and for a beat after, while the page settles
     }
     default: return { ok: false, text: `lantern does not know that request (${req.cmd})` }
@@ -69,6 +70,23 @@ async function dispatch(req: any): Promise<Reply> {
 }
 
 async function thePage(): Promise<Page> { return (page ??= await Page.open(chrome!, P.out, path.join(P.profile, 'lantern.json'), CONFIG)) }
+
+/** A new Chrome in place of one whose page stopped taking input: cookies carried over, the page opened again. */
+async function relaunch(): Promise<string> {
+  const old = chrome!, p = page!
+  let cookies: object[] = []; try { cookies = await p.cookiesOut() } catch {}
+  try { fs.writeFileSync(path.join(P.profile, 'cookies.json'), JSON.stringify(cookies), { mode: 0o600 }) } catch {}
+  page = undefined
+  await new Promise<void>((done) => { const t = setTimeout(() => { try { old.proc.kill('SIGKILL') } catch {}; done() }, 5000); old.proc.once('exit', () => { clearTimeout(t); done() }); old.kill() })
+  chrome = launchChrome(findChrome()!, P.profile)
+  chrome.proc.on('exit', (code) => { if (!stopping) shutdown(`chrome exited (${code})`) })
+  await chrome.send('Browser.getVersion', {}, undefined, 30_000)
+  const fresh = await thePage()
+  const url = p.lastUrl
+  if (url) { await fresh.load(url) }
+  log('restarted chrome: the page had stopped taking input')
+  return `(the page stopped taking input after that navigation, so lantern restarted its browser${url ? ` and opened ${url} again` : ''}; the step above was done, the next one is safe)\n`
+}
 
 /** A watcher over the socket (forest's panel, say): JSON lines — {frame, url} as the page paints, {did} as commands land. */
 async function watch(conn: net.Socket) {
@@ -147,7 +165,7 @@ async function main() {
     conn.on('error', () => {})
   })
   server.on('error', (e) => { console.error('socket error:', e.message); shutdown('socket error') })
-  server.listen(P.sock, () => { try { fs.chmodSync(P.sock, 0o600); fs.writeFileSync(P.pid, String(process.pid)) } catch {}; log('listening on', P.sock) })
+  server.listen(P.sock, () => { try { fs.chmodSync(P.sock, 0o600); fs.writeFileSync(P.pid, String(process.pid)); owned = true } catch {}; log('listening on', P.sock) })
   setInterval(() => { if (Date.now() - used > IDLE && !page?.rec && !page?.watchers.size) shutdown('idle for 30 minutes') }, 60_000)
 }
 

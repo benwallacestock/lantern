@@ -4,6 +4,22 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+### Fixed
+- Input no longer dies after a login or another navigation started by a click: Chrome is launched the way Playwright launches it (no component extensions, password bubble, translate, sync or back-forward cache), and if a page still stops taking input after a navigation, lantern notices in the same command and restarts its browser with the page and cookies carried over.
+- `screenshot --crop` and region screenshots were offset by the scroll position; `--full` now covers a page wider than the viewport too.
+- A daemon that lost its socket is stopped by the next command instead of wedging the project; `lantern close` finds it too.
+- Downloads go into `tmp/lantern/downloads/`, named by the server, and the click says so — not into the person's own Downloads folder.
+- A hover survives a screenshot; stills taken while recording leave the caption out.
+
+### Added
+- The snapshot looks inside open shadow roots, lists an open dialog first, names submit buttons by their value and checkboxes by the text beside them, lists iframes, and skips labels in favour of their fields.
+- `text=` also matches a label, placeholder, aria-label or button value; says when several elements match; hints at the nearest text when nothing matches exactly.
+- A click aimed at something covered by an overlay or a modal's backdrop is refused, naming what is in front.
+- `fill` sets date, time, range and colour inputs directly, refuses buttons and links, aims at a label's field, and says when focus was stolen while typing. `select` picks several options in a multi-select. `check` verifies the box changed.
+- `press` gives characters a proper key code (so `cmd+=` zooms), accepts `cmd++` and named keys like Equal, and F1–F12.
+- `open` reports an HTTP error page as a page (with its status) and explains HTTP auth; a fresh daemon reopens the last page; `wait` says when it capped; `text <selector>` returns every match; `get count text=…`; `lantern version`; `get` reads without scrolling.
+- Console lines for failed requests name the URL; beforeunload is noted.
+
 ## 0.1.0 — 2026-11-03
 
 ### Added

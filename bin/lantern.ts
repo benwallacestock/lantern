@@ -46,6 +46,16 @@ function connect(req: object): Promise<Reply | null> {
   })
 }
 
+const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
+/** A daemon whose socket has gone (deleted, or lost with a crash) still holds the Chrome profile: nothing else can start until it is gone. */
+async function reapOrphan() {
+  let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}
+  if (pid && alive(pid)) { process.stderr.write(`an earlier lantern (pid ${pid}) was still running without its socket; stopping it\n`); try { process.kill(pid, 'SIGTERM') } catch {}; for (let i = 0; i < 40 && alive(pid); i++) await sleep(250); if (alive(pid)) { try { process.kill(pid, 'SIGKILL') } catch {} } }
+  try { fs.rmSync(P.pid, { force: true }); fs.rmSync(P.sock, { force: true }) } catch {}
+  // And the leftovers of other projects' daemons that died: a socket or pid file with no process behind it.
+  try { for (const f of fs.readdirSync(path.dirname(P.pid))) { if (!f.endsWith('.pid')) continue; const file = path.join(path.dirname(P.pid), f); let other = 0; try { other = Number(fs.readFileSync(file, 'utf8')) } catch {}; if (other && !alive(other)) { fs.rmSync(file, { force: true }); fs.rmSync(file.replace(/\.pid$/, '.sock'), { force: true }) } } } catch {}
+}
+
 function start() {
   fs.mkdirSync(path.dirname(P.log), { recursive: true })
   const log = fs.openSync(P.log, 'a')
@@ -59,6 +69,7 @@ async function ask(req: object): Promise<Reply> {
   const first = await connect(req)
   if (first) return first
   if (!findChrome()) die(NO_CHROME)
+  await reapOrphan()
   const child = start()
   let gone = false; child.on('exit', () => (gone = true))
   const t0 = Date.now()
@@ -81,8 +92,13 @@ async function main() {
     if (!rest.includes('--no-open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
     process.exit(0)
   }
+  if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${JSON.parse(fs.readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')).version}`); return }
   if (cmd === 'status' || cmd === 'close') {
-    if (!fs.existsSync(P.sock)) { console.log(cmd === 'status' ? `lantern is not running for ${root}` : 'lantern was not running'); return }
+    if (!fs.existsSync(P.sock)) {
+      let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}
+      if (pid && alive(pid)) { if (cmd === 'close') { await reapOrphan(); console.log('closed (it had lost its socket)') } else console.log(`lantern (pid ${pid}) is running for ${root} but its socket is gone: \`lantern close\` will stop it`); return }
+      console.log(cmd === 'status' ? `lantern is not running for ${root}\n  log: ${P.log}` : 'lantern was not running'); return
+    }
     req = { cmd }
   } else if (cmd === 'frame') {
     const images: string[] = []; let title: string | undefined, captions: string[] | undefined, out: string | undefined, layout: 'side' | 'stack' | undefined, scale: number | undefined, note: string | undefined

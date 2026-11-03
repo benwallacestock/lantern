@@ -40,15 +40,27 @@ export function findChrome(): string | null {
 
 export const NO_CHROME = 'lantern needs a Chrome and found none. Install Google Chrome (or Chromium, Edge, Brave), or point LANTERN_CHROME at one.'
 
+/**
+ * Chrome with everything that moves on its own switched off — the set Playwright and Puppeteer use. A fresh profile
+ * otherwise installs component extensions, offers to save passwords, translate, sync and update, and any of those
+ * can take the focus from the page at an unlucky moment, after which input dispatched to the page goes nowhere.
+ */
 export function launchChrome(bin: string, profile: string, log: number | 'inherit' = 'inherit'): Chrome {
-  fs.mkdirSync(profile, { recursive: true })
+  fs.mkdirSync(path.join(profile, 'Default'), { recursive: true })
+  // A new profile starts with the password manager off (the save-password bubble is browser UI that steals focus).
+  const prefs = path.join(profile, 'Default', 'Preferences')
+  if (!fs.existsSync(prefs)) fs.writeFileSync(prefs, JSON.stringify({ credentials_enable_service: false, profile: { password_manager_enabled: false } }))
   return new Chrome(bin, [
     '--headless=new',
     `--user-data-dir=${profile}`,
-    '--no-first-run', '--no-default-browser-check',
+    '--no-first-run', '--no-default-browser-check', '--no-service-autorun',
+    '--disable-background-networking', '--disable-component-update', '--disable-component-extensions-with-background-pages', '--disable-extensions', '--disable-default-apps', '--disable-sync',
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
+    '--disable-breakpad', '--disable-client-side-phishing-detection', '--disable-hang-monitor', '--disable-ipc-flooding-protection', '--disable-prompt-on-repost', '--disable-popup-blocking',
+    '--password-store=basic', '--use-mock-keychain', '--metrics-recording-only', '--force-color-profile=srgb',
     '--hide-scrollbars', '--mute-audio',
     '--window-size=1440,900',
-    '--disable-features=TranslateUI,Translate',
+    // No back-forward cache (Playwright turns it off too: a cached document surprises navigation and input handling).
+    '--disable-features=TranslateUI,Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,PasswordManagerOnboarding,PasswordLeakDetection',
   ], log)
 }

@@ -54,7 +54,11 @@ function html(req: FrameReq, foot: string): string {
 
 export async function frame(chrome: Chrome, req: FrameReq, outDir: string): Promise<Reply> {
   if (!req.images?.length) return { ok: false, text: 'give one screenshot to frame, or two for a before/after' }
-  for (const f of req.images) if (!fs.existsSync(f)) return { ok: false, text: `no such image: ${f}` }
+  for (const f of req.images) {
+    if (!fs.existsSync(f)) return { ok: false, text: `no such image: ${f}` }
+    const head = Buffer.alloc(8); try { const fd = fs.openSync(f, 'r'); fs.readSync(fd, head, 0, 8, 0); fs.closeSync(fd) } catch {}
+    if (!head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { ok: false, text: `not a PNG: ${f} (frame takes the PNGs that \`lantern screenshot\` makes)` }
+  }
   const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   const foot = [`<b>lantern</b>`, req.note ? `<span>${esc(req.note)}</span>` : '', req.branch ? `<span class="mono">${esc(req.branch)}</span>` : '', `<span>${esc(when)}</span>`].filter(Boolean).join('<span>·</span>')
   fs.mkdirSync(outDir, { recursive: true })
