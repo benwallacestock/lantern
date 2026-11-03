@@ -4,6 +4,8 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+## 0.1.1 — 2026-11-03
+
 ### Fixed
 - Input no longer dies after a login or another navigation started by a click: Chrome is launched the way Playwright launches it (no component extensions, password bubble, translate, sync or back-forward cache), and if a page still stops taking input after a navigation, lantern notices in the same command and restarts its browser with the page and cookies carried over.
 - `screenshot --crop` and region screenshots were offset by the scroll position; `--full` now covers a page wider than the viewport too.

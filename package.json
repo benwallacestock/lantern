@@ -1,6 +1,6 @@
 {
   "name": "lantern-browser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A browser for coding agents: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer.",
   "license": "MIT",
   "type": "module",
