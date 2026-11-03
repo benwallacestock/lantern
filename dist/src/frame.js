@@ -1,0 +1,91 @@
+// `lantern frame`: a screenshot, or a before/after pair, framed for a pull request — padding, rounded corners, a
+// shadow, Before/After headers, a title, and a footer saying which branch and moment it came from. Chromium is
+// the renderer: the layout is a small HTML page rendered in a page of its own and captured, so it needs no image
+// library and looks like a product, not a test artifact.
+import fs from 'node:fs';
+import path from 'node:path';
+/** A PNG's size from its header, to decide how to lay the pictures out. */
+const pngSize = (p) => { const b = Buffer.alloc(24); const fd = fs.openSync(p, 'r'); fs.readSync(fd, b, 0, 24, 0); fs.closeSync(fd); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }; };
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const png = (p) => 'data:image/png;base64,' + fs.readFileSync(p).toString('base64');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function html(req, foot) {
+    const n = req.images.length;
+    const heads = req.captions?.length ? req.captions : n === 2 ? ['Before', 'After'] : n > 2 ? req.images.map((_, i) => `Step ${i + 1}`) : [''];
+    // Screenshots are 2x (the page draws at 2x, as a Retina screen does), so they are shown at half their pixels
+    // and the frame is captured at 2x: sharp, and the same size as on screen. --scale 1 for a 1x picture.
+    const scale = req.scale ?? 0.5;
+    const panels = req.images.map((f, i) => `<figure><figcaption>${esc(heads[i] ?? '')}</figcaption><img src="${png(f)}" style="zoom:${scale}"></figure>`).join('');
+    // Side by side, two wide screenshots come out a quarter size in a pull request's column. Landscape pictures stack,
+    // one above the other, and keep their width; portrait ones (a phone) sit side by side. --side / --stack override.
+    const sizes = req.images.map(pngSize);
+    const stack = req.layout ? req.layout === 'stack' : n > 1 && sizes.every((s) => s.w > s.h);
+    // Title, captions and footer are a fixed fraction of the frame's width, so wherever the frame is shown fitted
+    // to a column (a pull request, a chat) the type is the same size on screen whether the frame is one phone
+    // or two desktops wide. The floor is for frames narrower than that column, which display at their own size.
+    const shown = sizes.map((s) => s.w * scale);
+    const across = stack ? Math.max(...shown) : shown.reduce((a, b) => a + b, 0) + 22 * (n - 1);
+    const u = Math.max(0.5, across / 900);
+    return `<!doctype html><meta charset="utf-8"><style>
+    :root { --u: ${u.toFixed(3)}; }
+    html, body { margin: 0; background: transparent; overflow: hidden; }
+    body { display: inline-block; font-family: -apple-system, system-ui, sans-serif; color: #f2f2f4; }
+    .frame { display: inline-flex; flex-direction: column; gap: calc(14px * var(--u)); padding: calc(28px * var(--u)) calc(32px * var(--u)) calc(22px * var(--u)); background: linear-gradient(160deg, #26262c, #15151a); border-radius: calc(18px * var(--u)); }
+    h1 { margin: 0; font-size: calc(18px * var(--u)); font-weight: 700; letter-spacing: -0.01em; }
+    h1::before { content: ''; display: inline-block; width: calc(8px * var(--u)); height: calc(8px * var(--u)); border-radius: 50%; background: #ff7a2f; box-shadow: 0 0 calc(10px * var(--u)) rgba(255,122,47,.7); margin-right: calc(10px * var(--u)); vertical-align: middle; }
+    .row { display: flex; gap: calc(22px * var(--u)); align-items: flex-start; }
+    .row.stack { flex-direction: column; align-items: stretch; }
+    figure { margin: 0; background: #fff; border-radius: calc(12px * var(--u)); box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3); overflow: hidden; }
+    figcaption { padding: calc(9px * var(--u)) calc(14px * var(--u)); font-size: calc(13px * var(--u)); font-weight: 700; background: #2c2c33; color: #f2f2f4; border-bottom: 1px solid #3a3a42; }
+    figcaption:empty { display: none; }
+    img { display: block; }
+    .row.stack img { margin: 0 auto; } /* a small picture in a stacked pair sits in the middle, not at the left edge */
+    /* width 0 + min-width 100%: the footer wraps to the pictures' width instead of widening the frame to fit itself */
+    .foot { display: flex; flex-wrap: wrap; gap: 4px calc(12px * var(--u)); align-items: center; font-size: calc(10.5px * var(--u)); color: #a0a0aa; width: 0; min-width: 100%; }
+    .foot b { color: #ff7a2f; }
+    .foot .mono { font-family: ui-monospace, Menlo, monospace; }
+  </style><body><div class="frame">${req.title ? `<h1>${esc(req.title)}</h1>` : ''}<div class="row${stack ? ' stack' : ''}">${panels}</div><div class="foot">${foot}</div></div></body>`;
+}
+export async function frame(chrome, req, outDir) {
+    if (!req.images?.length)
+        return { ok: false, text: 'give one screenshot to frame, or two for a before/after' };
+    for (const f of req.images) {
+        if (!fs.existsSync(f))
+            return { ok: false, text: `no such image: ${f}` };
+        const head = Buffer.alloc(8);
+        try {
+            const fd = fs.openSync(f, 'r');
+            fs.readSync(fd, head, 0, 8, 0);
+            fs.closeSync(fd);
+        }
+        catch { }
+        if (!head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+            return { ok: false, text: `not a PNG: ${f} (frame takes the PNGs that \`lantern screenshot\` makes)` };
+    }
+    const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const foot = [`<b>lantern</b>`, req.note ? `<span>${esc(req.note)}</span>` : '', req.branch ? `<span class="mono">${esc(req.branch)}</span>` : '', `<span>${esc(when)}</span>`].filter(Boolean).join('<span>·</span>');
+    fs.mkdirSync(outDir, { recursive: true });
+    const { targetId } = await chrome.send('Target.createTarget', { url: 'about:blank' });
+    const { sessionId } = await chrome.send('Target.attachToTarget', { targetId, flatten: true });
+    const s = (method, params = {}) => chrome.send(method, params, sessionId, 20_000);
+    try {
+        await s('Page.enable');
+        // Transparent outside the rounded frame, so the PNG sits on any background.
+        await s('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
+        await s('Emulation.setDeviceMetricsOverride', { width: 800, height: 600, deviceScaleFactor: 2, mobile: false });
+        const { frameTree } = await s('Page.getFrameTree');
+        await s('Page.setDocumentContent', { frameId: frameTree.frame.id, html: html(req, foot) });
+        await sleep(300);
+        const { result } = await s('Runtime.evaluate', { expression: '[document.body.scrollWidth, document.body.scrollHeight]', returnByValue: true });
+        const [w, h] = result.value.map(Math.ceil);
+        await s('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: false });
+        await sleep(300); // let it paint at the new size
+        const shot = await s('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: w, height: h, scale: 1 }, captureBeyondViewport: true });
+        const out = req.out ? path.resolve(req.cwd, req.out) : path.join(outDir, `framed-${new Date().toISOString().replace(/[:.]/g, '-')}.png`);
+        fs.writeFileSync(out, Buffer.from(shot.data, 'base64'));
+        return { ok: true, text: `${out}\n(${w * 2}×${h * 2}${req.title ? '' : ' — untitled: pass --title "what it shows" so the picture says what it is wherever it ends up'})` };
+    }
+    finally {
+        await chrome.send('Target.closeTarget', { targetId }).catch(() => { });
+    }
+}
