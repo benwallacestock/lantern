@@ -11,6 +11,12 @@ import { findChrome, NO_CHROME } from '../src/chrome.ts'
 import { paths } from '../src/paths.ts'
 import { USAGE } from '../src/usage.ts'
 
+// This file runs as TypeScript from a checkout (Node strips the types) and as JavaScript from dist/ once built for an
+// npm install: the daemon beside it has the same extension, and package.json is one level further up when built.
+const here = fileURLToPath(import.meta.url)
+const DAEMON = path.join(path.dirname(here), '..', 'src', 'daemon' + path.extname(here))
+const PACKAGE = [path.join(path.dirname(here), '..', 'package.json'), path.join(path.dirname(here), '..', '..', 'package.json')].find((f) => fs.existsSync(f))!
+
 type Reply = { ok: boolean; text: string }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const die = (msg: string): never => { process.stderr.write(msg + '\n'); process.exit(1) }
@@ -59,8 +65,7 @@ async function reapOrphan() {
 function start() {
   fs.mkdirSync(path.dirname(P.log), { recursive: true })
   const log = fs.openSync(P.log, 'a')
-  const daemon = fileURLToPath(new URL('../src/daemon.ts', import.meta.url))
-  const child = spawn(process.execPath, [daemon, root], { detached: true, stdio: ['ignore', log, log], env: process.env })
+  const child = spawn(process.execPath, [DAEMON, root], { detached: true, stdio: ['ignore', log, log], env: process.env })
   child.unref()
   return child
 }
@@ -92,7 +97,7 @@ async function main() {
     if (!rest.includes('--no-open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
     process.exit(0)
   }
-  if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${JSON.parse(fs.readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')).version}`); return }
+  if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${JSON.parse(fs.readFileSync(PACKAGE, 'utf8')).version}`); return }
   if (cmd === 'status' || cmd === 'close') {
     if (!fs.existsSync(P.sock)) {
       let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}

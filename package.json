@@ -5,11 +5,12 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "lantern": "./bin/lantern.ts"
+    "lantern": "./dist/bin/lantern.js"
   },
   "files": [
     "bin",
     "src",
+    "dist",
     "skills",
     "README.md",
     "CHANGELOG.md",
@@ -21,7 +22,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test tests/cli.test.ts",
-    "release": "node scripts/release.ts"
+    "release": "node scripts/release.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build"
   },
   "keywords": [
     "browser",

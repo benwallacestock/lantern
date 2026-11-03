@@ -28,7 +28,7 @@ Each command is a short-lived process. The first one starts a daemon for the pro
 
 ## Install
 
-Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself.
+Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself. The install from GitHub builds the CLI with TypeScript on your machine, which takes a few seconds.
 
 ```bash
 npm install -g github:benwallacestock/lantern     # the CLI, straight from this repo; pin a release with #v0.1.0
@@ -79,7 +79,7 @@ Most projects need none. A `.lantern.json` at the project root, or the same keys
 
 ## How it is put together
 
-- `bin/lantern.ts` — the CLI: finds the project root, talks to the daemon over a unix socket, starts it if it isn't up.
+- `bin/lantern.ts` — the CLI: finds the project root, talks to the daemon over a unix socket, starts it if it isn't up. From a checkout it runs as TypeScript (Node strips the types); an npm install builds it into `dist/` first, since Node won't strip types under `node_modules`.
 - `src/daemon.ts` — one per project: owns the Chrome, the page, and a queue so commands never interleave.
 - `src/cdp.ts` — the DevTools protocol over Chrome's pipe. No dependencies.
 - `src/page.ts` — every command, and the recorder.

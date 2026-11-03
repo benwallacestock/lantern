@@ -23,6 +23,8 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
       - run: google-chrome --version && ffmpeg -version > /dev/null && ffprobe -version > /dev/null
       - run: npm test
+      # The way people get it: installed from git into a prefix, run as built JavaScript.
+      - run: npm run build && mkdir -p /tmp/lantern-prefix && npm install -g --prefix /tmp/lantern-prefix "git+file://$PWD" && /tmp/lantern-prefix/bin/lantern version && /tmp/lantern-prefix/bin/lantern help | head -1
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
