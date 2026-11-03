@@ -1,0 +1,8 @@
+{
+  "name": "glade",
+  "description": "A browser for coding agents: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer. Skills for the `glade` CLI.",
+  "version": "0.1.0",
+  "author": { "name": "Spruce" },
+  "homepage": "https://github.com/SpruceEco/glade",
+  "keywords": ["browser", "screenshot", "demo", "video", "pull-request", "codex", "claude-code"]
+}
