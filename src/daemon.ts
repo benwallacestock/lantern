@@ -76,12 +76,13 @@ async function relaunch(): Promise<string> {
   let cookies: object[] = []; try { cookies = await p.cookiesOut() } catch {}
   try { fs.writeFileSync(path.join(P.profile, 'cookies.json'), JSON.stringify(cookies), { mode: 0o600 }) } catch {}
   page = undefined
+  old.proc.removeAllListeners('exit') // its going is intended: not the "chrome exited" that shuts the daemon down
   await new Promise<void>((done) => { const t = setTimeout(() => { try { old.proc.kill('SIGKILL') } catch {}; done() }, 5000); old.proc.once('exit', () => { clearTimeout(t); done() }); old.kill() })
   chrome = launchChrome(findChrome()!, P.profile)
   chrome.proc.on('exit', (code) => { if (!stopping) shutdown(`chrome exited (${code})`) })
   await chrome.send('Browser.getVersion', {}, undefined, 30_000)
   const fresh = await thePage()
-  const url = p.lastUrl
+  const url = /^https?:/.test(p.currentUrl) ? p.currentUrl : p.lastUrl // where it was, including after a click that navigated
   if (url) { await fresh.load(url) }
   log('restarted chrome: the page had stopped taking input')
   return `(the page stopped taking input after that navigation, so lantern restarted its browser${url ? ` and opened ${url} again` : ''}; the step above was done, the next one is safe)\n`

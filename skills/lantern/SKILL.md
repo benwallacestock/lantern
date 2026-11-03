@@ -14,10 +14,10 @@ Check it is there with `lantern help`. If the command is not found, install it o
 Open, look, act, look again. The snapshot is how you see; read it before you click.
 
 ```bash
-lantern open http://localhost:3000/admin/jobs   # a full URL the first time; after that `lantern open /settings`
+lantern open http://localhost:3000/walks   # a full URL the first time; after that `lantern open /settings`
 lantern snapshot              # what's on the page you can act on; each control has a ref like e12
 lantern click e12             # or: click "text=Save changes", a CSS selector, or 815,520 for a spot on a canvas
-lantern fill e7 "Heat pump"   # clicks the field and types over what's in it, key by key
+lantern fill e7 "Large box"   # clicks the field and types over what's in it, key by key
 lantern press Enter           # or Escape, Tab, ArrowDown, a character, cmd+a, shift+Tab, ctrl+Enter
 lantern text                  # the page's visible text, to confirm what it now says (or `text .selector`: every match, separated by ---)
 lantern screenshot            # prints a PNG path: open that file with your image tool and look at it
@@ -29,7 +29,7 @@ More, when you need them:
 lantern hover e12 · dblclick e12 · rightclick e12 · drag e12 e30 · drag 400,300 700,500
 lantern scroll down 500 · scroll up · scroll down 400 at e12 · scroll to e12
 lantern type "free text"      # into whatever has focus — a canvas, an editor
-lantern select e7 "Heat pump" · check e9 · uncheck e9 · upload e4 ./tmp/photo.jpg
+lantern select e7 "Express" · check e9 · uncheck e9 · upload e4 ./tmp/photo.jpg
 lantern get text|value|attr <name>|count|box <target> · is visible|enabled|checked <target>   # read or check one thing
 lantern wait 1500 · wait "Saved"   # a pause (30s at most), or until that text is on the page (10s at most)
 lantern url · back · reload · console [--clear] · eval <js>
@@ -63,13 +63,13 @@ A UI pull request needs pictures, and the reviewer should not have to guess what
 lantern size desktop                                     # the same size for before and after (or phone)
 lantern screenshot                                       # before the change (or on the base branch) → before.png
 lantern screenshot                                       # after → after.png
-lantern screenshot text=72%                              # the information you're talking about, glowing, on the whole page
-lantern frame before.png after.png --title "Canvas and device symbols"   # one PNG: Before above After, titled, with branch and time
+lantern screenshot "text=£1.80"                              # the information you're talking about, glowing, on the whole page
+lantern frame before.png after.png --title "Checkout totals"   # one PNG: Before above After, titled, with branch and time
 lantern frame after.png --title "The new empty state"                    # a single screenshot, framed
 gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'   # into the PR body (gh 2.80+); or --attach on pr create / pr comment
 ```
 
-- Always give `--title`: it is drawn into the frame as its heading, so the image says what it shows wherever it ends up (the PR, Slack, a ticket). Say what the pair is of ("Canvas and device symbols"), not "before and after".
+- Always give `--title`: it is drawn into the frame as its heading, so the image says what it shows wherever it ends up (the PR, Slack, a ticket). Say what the pair is of ("Checkout totals"), not "before and after".
 - Take the "before" first, on the base branch or before applying the change, so the pair really is a pair. Same `size` for both.
 - When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h` in viewport pixels. The whole page when the change is the page; `--full` for a page longer or wider than the screen. Don't crop by hand: the frame is the crop. Screenshots and highlights scroll the target into view; for a picture from the top, `lantern scroll to body` first. Pictures are 2x (a 1440×900 viewport gives a 2880×1800 PNG), the size a PR wants.
 - `--captions "Old|New"` to name the panels; `--note "SPR-123"` for the footer; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override).

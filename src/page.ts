@@ -313,14 +313,17 @@ export class Page {
     if (this.navigated && INPUT.has(sub) && !(await this.takesInput())) { this.dead = true; this.note('the page stopped taking input after that navigation; the browser is being restarted') }
     return { ...r, text: this.preface() + r.text }
   }
-  /** Does a key sent to the page arrive? A Shift press changes nothing on a page. */
+  /** Does a key sent to the page arrive? A Shift press changes nothing on a page. Asked twice, with time to answer,
+   * so a slow machine is not mistaken for a dead page: a restart on a false alarm costs seconds. */
   async takesInput(): Promise<boolean> {
     try {
-      await this.evaluate(`(() => { window.__lantern_in = 0; addEventListener('keydown', (e) => { if (e.key === 'Shift') window.__lantern_in++ }, true) })()`)
-      await this.cdp('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16, modifiers: 8 })
-      await this.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 })
-      await sleep(150)
-      return (await this.evaluate<number>('window.__lantern_in')) > 0
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await this.evaluate(`(() => { window.__lantern_in = 0; if (!window.__lantern_in_listening) { window.__lantern_in_listening = true; addEventListener('keydown', (e) => { if (e.key === 'Shift') window.__lantern_in++ }, true) } })()`)
+        await this.cdp('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16, modifiers: 8 })
+        await this.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 })
+        for (let i = 0; i < 10; i++) { await sleep(100); if ((await this.evaluate<number>('window.__lantern_in')) > 0) return true }
+      }
+      return false
     } catch { return true } // can't tell: assume the best
   }
 

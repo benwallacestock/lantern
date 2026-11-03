@@ -4,6 +4,12 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+### Fixed
+- The restart lantern does when a page stops taking input (which still happens after some logins, for reasons that are Chrome's) took the daemon down with it, so the command got no answer; it now carries on, reopens the page the browser was on, and checks twice with time to answer before deciding a page is dead.
+
+### Changed
+- The tests run as four files in parallel, each with its own browser, in about a quarter of the time; the fixture app is now a trail planner.
+
 ## 0.1.2 — 2026-11-03
 
 ### Changed

@@ -11,14 +11,14 @@ lantern grew out of [forest](https://github.com/SpruceEco/forest), Spruce's tool
 ```bash
 lantern open http://localhost:3000
 lantern snapshot                       # what's on the page, each control with a ref
-lantern fill e7 "Back bedroom"
-lantern click "text=Calculate demand"
-lantern screenshot "text=1.2 kW"       # the page with that element glowing → tmp/lantern/shot-….png
-lantern frame before.png after.png --title "Demand after calculating"   # one PNG for the PR
+lantern fill e7 "Large box"
+lantern click "text=Get a quote"
+lantern screenshot "text=£1.80"       # the page with that element glowing → tmp/lantern/shot-….png
+lantern frame before.png after.png --title "The quote after sizing"   # one PNG for the PR
 
 lantern record start
-lantern record caption "Calculate the heat demand"
-lantern click "text=Calculate demand"
+lantern record caption "Ask for a quote"
+lantern click "text=Get a quote"
 lantern record stop                    # → tmp/lantern/demo-….mp4
 
 lantern watch                          # a live view of the page, in your own browser
