@@ -30,9 +30,9 @@ lantern click "text=Order #1042"
 lantern wait 1500
 lantern click e42                                      # refs from `lantern snapshot`
 lantern record caption "The price follows the delivery choice"
-lantern highlight "text=Total"
+lantern callout "text=Estimated time" "Two hours, now the terrain is a scramble"   # or `highlight` for the glow alone
 lantern wait 2500
-lantern highlight off
+lantern callout off
 lantern record caption off                             # no caption for a while, if a step speaks for itself
 lantern record stop                                    # → tmp/lantern/demo-….mp4 and its length
 ```
