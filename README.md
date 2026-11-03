@@ -2,6 +2,8 @@
 <h1 align="center">lantern</h1>
 <p align="center"><b>Let your agent see in the dark.</b><br>A command-line browser for coding agents.</p>
 
+> **This is vibe coded.** lantern was written almost entirely by Claude (Claude Fable 5.1, in Claude Code), directed and reviewed by [Ben Wallace-Stock](https://github.com/benwallacestock). The design and the recording mechanism come from forest's agent browser; the port, the tests and these docs were produced by the model in a day. It has a real end-to-end test suite and it has been used in anger, but read the code before you trust it with anything that matters, and expect rough edges. Bug reports and pull requests are welcome, from people and from agents.
+
 lantern is a CLI. Claude Code, Codex and anything else that can run a shell command use it to drive a real Chrome page: open, click, fill, read what it says. It takes screenshots that are ready for a pull request, records demo videos with captions and a visible pointer, and lets you watch the agent's page live from your own browser. It ships with skills that teach those agents when and how to use it.
 
 lantern grew out of [forest](https://github.com/SpruceEco/forest), Spruce's tool for running one tree per branch, where its agent browser lives. This is that browser on its own, for any project.
