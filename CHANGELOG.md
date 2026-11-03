@@ -4,6 +4,8 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+## 0.1.0 — 2026-11-03
+
 ### Added
 - The `lantern` CLI: a real Chrome page for coding agents, driven over Chrome's pipe by a daemon per project, so the page survives between commands. `open`, `snapshot` with refs, `click`, `fill`, `press`, `type`, `hover`, `drag`, `scroll`, `select`, `check`, `upload`, `get`, `is`, `wait`, `text`, `console`, `eval`, `url`, `back`, `reload`, `size`, `status`, `close`.
 - Screenshots at 2x: the viewport, the page with one element glowing, a crop, a region, or the whole page; `size` presets from phone to wide.
