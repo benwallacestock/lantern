@@ -24,7 +24,7 @@ jobs:
       - run: google-chrome --version && ffmpeg -version > /dev/null && ffprobe -version > /dev/null
       - run: npm test
       # The way people get it: the packed tarball, installed into a prefix, run as the one bundled file.
-      - run: npm run build && npm pack && mkdir -p /tmp/lantern-prefix && npm install -g --prefix /tmp/lantern-prefix ./lantern-browser-*.tgz && /tmp/lantern-prefix/bin/lantern version && /tmp/lantern-prefix/bin/lantern help | head -1
+      - run: npm run build && npm pack && mkdir -p /tmp/lantern-prefix && npm install -g --prefix /tmp/lantern-prefix ./benwallacestock-lantern-*.tgz && /tmp/lantern-prefix/bin/lantern version && /tmp/lantern-prefix/bin/lantern help | head -1
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

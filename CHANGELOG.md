@@ -14,7 +14,7 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 - A hover survives a screenshot; stills taken while recording leave the caption out.
 
 ### Changed
-- Installed from npm as `lantern-browser`: one bundled file built by esbuild at publish time. The release workflow publishes to npm as well as GitHub. The Claude plugin carries the skills; the CLI comes from npm, or runs with `npx -y lantern-browser` uninstalled.
+- Installed from npm as `@benwallacestock/lantern`: one bundled file built by esbuild at publish time. The release workflow publishes to npm as well as GitHub. The Claude plugin carries the skills; the CLI comes from npm, or runs with `npx -y @benwallacestock/lantern` uninstalled.
 
 ### Added
 - The snapshot looks inside open shadow roots, lists an open dialog first, names submit buttons by their value and checkboxes by the text beside them, lists iframes, and skips labels in favour of their fields.

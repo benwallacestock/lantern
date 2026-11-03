@@ -31,7 +31,7 @@ jobs:
           V="${GITHUB_REF_NAME#v}"
           PRE=""; case "$V" in 0.*) PRE="--prerelease";; esac
           gh release create "$GITHUB_REF_NAME" --title "lantern $V" --notes-file notes.md $PRE
-      # To npm. With an NPM_TOKEN secret (an npm granular access token that may publish lantern-browser) it publishes
+      # To npm. With an NPM_TOKEN secret (an npm granular access token that may publish @benwallacestock/lantern) it publishes
       # with that; without one it tries npm's trusted publishing, which works once the package on npmjs.com names
       # this repository and workflow as its publisher. Either way the package carries provenance.
       - name: Publish to npm
@@ -39,6 +39,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           V=$(node -p "require('./package.json').version")
-          if npm view "lantern-browser@$V" version >/dev/null 2>&1; then echo "lantern-browser@$V is already on npm (published by hand?): nothing to do"; exit 0; fi
+          if npm view "@benwallacestock/lantern@$V" version >/dev/null 2>&1; then echo "@benwallacestock/lantern@$V is already on npm (published by hand?): nothing to do"; exit 0; fi
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "no NPM_TOKEN secret: trying trusted publishing"; fi
           npm publish --provenance --access public

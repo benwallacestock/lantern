@@ -31,7 +31,7 @@ Each command is a short-lived process. The first one starts a daemon for the pro
 Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself. 
 
 ```bash
-npm install -g lantern-browser      # the CLI; or run it without installing: npx -y lantern-browser <command>
+npm install -g @benwallacestock/lantern      # the CLI; or run it without installing: npx -y @benwallacestock/lantern <command>
 ```
 
 **Claude Code** — the plugin brings the skills that teach Claude when and how to use it:
@@ -45,7 +45,7 @@ npm install -g lantern-browser      # the CLI; or run it without installing: npx
 
 ```bash
 npx skills add benwallacestock/lantern
-# or: ln -s "$(npm root -g)/lantern-browser/skills/"* ~/.codex/skills/
+# or: ln -s "$(npm root -g)/@benwallacestock/lantern/skills/"* ~/.codex/skills/
 ```
 
 **Any other agent** — put the text of `skills/lantern/SKILL.md` where the agent reads its instructions.
