@@ -4,7 +4,14 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+### Fixed
+- Recordings played in slow motion once every painted frame was kept: a minimum frame time meant for sparse captures stretched dense ones. Clips are real time now, and `record stop` gives the length to a decimal.
+- `lantern text` and `wait` no longer see lantern's own overlays (the typing bubble lingered in the page's text).
+- `scroll to body` went to the bottom; now `scroll top` and `scroll bottom` exist and `scroll to body` means the top.
+- `fill e7 ""` clears the field instead of reporting success and leaving it.
+
 ### Added
+- `get style <property> <target>` reads a computed style, for checking a colour against a design.
 - `callout <target> <words>`: the words beside an element, joined to it by a line, with the element lit; `callout 2 …` numbers it; in screenshots and recordings.
 - `record start --title "…" [--note] [--footer]`: the video gets a frame like a still, with the glyph, the title and the footer, from ffmpeg or from the Chrome encoder.
 - Typing is shown in a bubble by the pointer, each character popping in, with key combinations in the same bubble.

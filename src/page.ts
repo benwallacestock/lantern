@@ -12,7 +12,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
-import { ACCENT_JS, BLUE, CALLOUT_JS, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, MARK_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { ACCENT_JS, BLUE, CALLOUT_JS, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, MARK_JS, ORANGE, HIGHLIGHT_JS, WITHOUT_OVERLAYS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { USAGE } from './usage.ts'
 import { encodeInChrome } from './encode.ts'
 import { videoFrame } from './videoFrame.ts'
@@ -267,7 +267,7 @@ export class Page {
     const glide = this.rec && opts.settle === undefined ? 600 : 250
     this.at = { x, y }; this.fire(CURSOR_JS(x, y, glide))
     await this.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: opts.buttons ? 'left' : 'none', buttons: opts.buttons ?? 0 })
-    await sleep(opts.settle ?? (this.rec ? 900 : 250)) // a beat so the pointer is seen arriving before the page reacts
+    await sleep(opts.settle ?? (this.rec ? 650 : 250)) // a beat so the pointer is seen arriving before the page reacts
   }
   press(x: number, y: number, type: 'mousePressed' | 'mouseReleased', clickCount = 1, button: 'left' | 'right' = 'left') {
     return this.cdp('Input.dispatchMouseEvent', { type, x, y, button, buttons: type === 'mousePressed' ? (button === 'right' ? 2 : 1) : 0, clickCount })
@@ -376,7 +376,7 @@ export class Page {
         return { ok: true, text: [`${s.url}${s.title ? ` — ${s.title}` : ''}`, ...(s.lines.length ? s.lines : [frames ? `(the page is made of ${frames} frame${frames > 1 ? 's' : ''}, and the snapshot does not look inside frames — open a frame's own URL, or use eval)` : '(nothing to act on — the page may still be loading; try `lantern wait 1000`, or `lantern text`)']), ...(s.more ? [`… and ${s.more} more controls not listed`] : [])].join('\n') }
       }
       case 'text': {
-        const t = await this.evaluate<string[] | null>(`(() => { ${rest[0] ? `let els; try { els = [...document.querySelectorAll(${JSON.stringify(rest[0])})] } catch { return null }; if (!els.length) return null; return els.map((e) => e.innerText)` : 'return [document.body.innerText]'} })()`)
+        const t = await this.evaluate<string[] | null>(WITHOUT_OVERLAYS(`(() => { ${rest[0] ? `let els; try { els = [...document.querySelectorAll(${JSON.stringify(rest[0])})] } catch { return null }; if (!els.length) return null; return els.map((e) => e.innerText)` : 'return [document.body.innerText]'} })()`))
         if (t === null) return { ok: false, text: `no element matches ${rest[0]}` }
         const text = t.map((x) => x.replace(/\n{3,}/g, '\n\n').trim()).join(t.length > 1 ? '\n---\n' : '')
         const head = t.length > 1 ? `(${t.length} elements match; each is separated by ---)\n` : ''
@@ -413,6 +413,12 @@ export class Page {
         if (!(await this.evaluate<boolean>(FOCUS_JS))) return { ok: false, text: `"${at.name}" did not take focus — is it a field?` }
         // Replace, as the help says: select what's there (a person would) and type over it.
         await this.evaluate(`(() => { const el = window.__lantern.last; if (el && el.select) el.select(); else if (el && el.isContentEditable) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r) } })()`)
+        if (text === '') { // nothing to type over it with: delete what was selected
+          await this.cdp('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 }); await this.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 }); this.hud(`key(['⌫'])`)
+          await sleep(100)
+          const left = await this.evaluate<string>(`(() => { const el = window.__lantern.last; return 'value' in el ? String(el.value) : el.innerText })()`)
+          return left ? { ok: false, text: `tried to clear "${at.name}" but it still holds ${JSON.stringify(left.slice(0, 80))}` } : { ok: true, text: `cleared "${at.name}"` }
+        }
         await this.typeText(text)
         // Did it stick? A page that moves focus while you type scatters the text; say so rather than "filled".
         const after = await this.evaluate<{ held: boolean; value: string; where: string }>(`(() => { const el = window.__lantern.last; const a = el.getRootNode().activeElement || document.activeElement; const held = a === el || el.contains(a); const value = 'value' in el ? String(el.value) : el.innerText; return { held, value: value.slice(0, 80), where: a ? a.tagName.toLowerCase() + (a.id ? '#' + a.id : '') : 'nothing' } })()`)
@@ -473,7 +479,7 @@ export class Page {
         // The pointer out of the way of what is being shown, as for a highlight.
         const c = this.at
         if (c && c.x >= r.x - 12 && c.x <= r.x + r.width + 12 && c.y >= r.y - 12 && c.y <= r.y + r.height + 12) { const [w, h] = this.size; await this.moveMouse(r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), Math.min(h - 12, r.y + r.height + 36), { settle: 300 }) }
-        return { ok: true, text: `callout on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
+        return { ok: true, text: `callout${n != null ? ` ${n}` : ''} on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
       }
       case 'hover': {
         if (!rest[0]) return { ok: false, text: 'hover what? a ref, text=Label, a selector, or x,y' }
@@ -488,8 +494,16 @@ export class Page {
       }
       case 'scroll': {
         const dir = rest[0]
+        if (dir === 'top' || dir === 'bottom') {
+          const [cw, ch] = this.size
+          if (this.rec) { await this.moveMouse(cw / 2, ch / 2, { settle: 120 }); this.hud(`wheel(${cw / 2}, ${ch / 2}, ${JSON.stringify(dir === 'top' ? 'up' : 'down')})`) }
+          await this.evaluate(`window.scrollTo({ top: ${dir === 'top' ? 0 : 'document.documentElement.scrollHeight'}, behavior: ${this.rec ? "'smooth'" : "'instant'"} })`)
+          await sleep(this.rec ? 900 : 150)
+          return { ok: true, text: `scrolled to the ${dir}` }
+        }
         if (dir === 'to' && rest[1]) {
           const target = rest.slice(1).join(' ')
+          if (/^(body|html)$/i.test(target)) { await this.evaluate('window.scrollTo(0, 0)'); await sleep(150); return { ok: true, text: 'scrolled to the top (for the bottom: `lantern scroll bottom`)' } }
           if (this.rec) { // the viewer should see the page scroll there, wheel pill and all, not find it already there
             const far = await this.spot(target, false, true).catch(() => null)
             if (far) {
@@ -510,7 +524,7 @@ export class Page {
           const at = await this.spot(target, true, true); await this.moveMouse(at.x, at.y, { settle: 150 }); return { ok: true, text: `scrolled "${at.name}" into view${this.several(at)}` }
         }
         const d = { down: [0, 1], up: [0, -1], right: [1, 0], left: [-1, 0] }[dir ?? '']
-        if (!d) return { ok: false, text: 'usage: lantern scroll <down|up|left|right> [px] [at <target>], or scroll to <target>' }
+        if (!d) return { ok: false, text: 'usage: lantern scroll <down|up|left|right> [px] [at <target>], scroll to <target>, scroll top, scroll bottom' }
         if (rest[1] && rest[1] !== 'at' && !/^\d+$/.test(rest[1])) return { ok: false, text: `scroll how far? ${rest[1]} is not a number of pixels` }
         const px = /^\d+$/.test(rest[1] ?? '') ? Number(rest[1]) : 500
         const atIdx = rest.indexOf('at')
@@ -572,16 +586,16 @@ export class Page {
         return { ok: true, text: `put ${files.length === 1 ? path.basename(files[0]) : `${files.length} files`} in the file input at "${at.name}"` }
       }
       case 'get': {
-        const what = rest[0], target = rest.slice(what === 'attr' ? 2 : 1).join(' ')
-        if (!what || !target) return { ok: false, text: 'usage: lantern get text|value|attr <name>|count|box <target>' }
+        const what = rest[0], target = rest.slice(what === 'attr' || what === 'style' ? 2 : 1).join(' ')
+        if (!what || !target) return { ok: false, text: 'usage: lantern get text|value|attr <name>|style <property>|count|box <target>' }
         if (what === 'count') {
           if (target.startsWith('text=')) { const want = target.slice(5).replace(/\s+/g, ' ').trim().toLowerCase(); const n = await this.evaluate<number>(`(() => { const clean = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase(); const hits = [...document.body.querySelectorAll('*')].filter((e) => clean(e.innerText) === ${JSON.stringify(want)}); return hits.filter((e) => !hits.some((o) => o !== e && e.contains(o))).length })()`); return { ok: true, text: String(n) } }
           const n = await this.evaluate<number | null>(`(() => { try { return document.querySelectorAll(${JSON.stringify(target)}).length } catch { return null } })()`); return n === null ? { ok: false, text: `${target} is not a selector` } : { ok: true, text: String(n) }
         }
         const at = await this.spot(target, false) // a read: the page is left where it is
         if (what === 'box') return { ok: true, text: at.rect ? `${Math.round(at.rect.x)},${Math.round(at.rect.y)} ${Math.round(at.rect.width)}×${Math.round(at.rect.height)} (in the viewport; page scrolled ${Math.round(at.scroll?.x ?? 0)},${Math.round(at.scroll?.y ?? 0)})` : `${at.x},${at.y}` }
-        const v = await this.evaluate<string | null>(`(() => { const el = window.__lantern && window.__lantern.last; if (!el) return null; ${what === 'text' ? 'return el.innerText' : what === 'value' ? "return 'value' in el ? String(el.value) : null" : what === 'attr' ? `return el.getAttribute(${JSON.stringify(rest[1] ?? '')})` : 'return null'} })()`)
-        return v === null ? { ok: false, text: `"${at.name}" has no ${what}${what === 'attr' ? ` ${rest[1]}` : ''}` } : { ok: true, text: v }
+        const v = await this.evaluate<string | null>(WITHOUT_OVERLAYS(`(() => { const el = window.__lantern && window.__lantern.last; if (!el) return null; ${what === 'text' ? 'return el.innerText' : what === 'value' ? "return 'value' in el ? String(el.value) : null" : what === 'attr' ? `return el.getAttribute(${JSON.stringify(rest[1] ?? '')})` : what === 'style' ? `return getComputedStyle(el).getPropertyValue(${JSON.stringify(rest[1] ?? '')}) || null` : 'return null'} })()`))
+        return v === null ? { ok: false, text: `"${at.name}" has no ${what}${what === 'attr' || what === 'style' ? ` ${rest[1]}` : ''}` } : { ok: true, text: v }
       }
       case 'is': {
         const what = rest[0], target = rest.slice(1).join(' ')
@@ -594,7 +608,7 @@ export class Page {
       case 'wait': {
         const a = rest.join(' ')
         if (/^\d+$/.test(a)) { const ms = Math.min(Number(a), 30_000); await sleep(ms); return { ok: true, text: `waited ${ms}ms${ms < Number(a) ? ' (the most one wait can be)' : ''}` } }
-        for (let i = 0; i < 40; i++) { if (await this.evaluate<boolean>(`document.body.innerText.includes(${JSON.stringify(a)})`)) return { ok: true, text: `"${a}" is on the page` }; await sleep(250) }
+        for (let i = 0; i < 40; i++) { if (await this.evaluate<boolean>(WITHOUT_OVERLAYS(`document.body.innerText.includes(${JSON.stringify(a)})`))) return { ok: true, text: `"${a}" is on the page` }; await sleep(250) }
         return { ok: false, text: `"${a}" did not appear within 10s` }
       }
       case 'eval': {
@@ -648,7 +662,7 @@ export class Page {
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
       await this.wantFrames()
-      return { ok: true, text: `recording at ${rw}×${rh} (the video comes out ${Math.min(1920, rw * SCALE)} pixels wide${opts.title ? `, framed and titled "${opts.title}"` : ''}) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
+      return { ok: true, text: `recording at ${rw}×${rh} (the clip comes out ${Math.min(1920, rw * SCALE)} pixels wide${opts.title ? `, in a frame titled "${opts.title}"` : ''}) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
     }
     if (what === 'caption') {
       if (!this.rec) return { ok: false, text: 'not recording — `lantern record start` first' }
@@ -671,7 +685,7 @@ export class Page {
       const same = cast.length <= 2 && cast.every((f) => { try { return fs.readFileSync(f.file).equals(fs.readFileSync(cast[0].file)) } catch { return false } })
       if (r.frames.length < 2 || same) { fs.rmSync(r.dir, { recursive: true, force: true }); return { ok: false, text: 'nothing was recorded: the page never changed while recording' } }
       // Each frame shows until the next; a long gap (the agent thinking) is cut to a beat, so the clip is the interactions, not the waiting.
-      const GAP = 1.2, MIN = 0.08, HOLD = 2.5
+      const GAP = 1.2, MIN = 1 / 30, HOLD = 2.5 // each frame shows for the time until the next: real time, never slowed
       const durs = r.frames.map((f, i) => { const next = r.frames[i + 1]; return next ? Math.max(MIN, Math.min(GAP, (next.t - f.t) / 1000)) : 1.5 })
       // Every caption stays up for at least HOLD seconds: an agent that sets one and acts in the same breath leaves
       // nothing readable. The segment keeps its pace; its last frame holds for whatever time is missing.
@@ -705,7 +719,7 @@ export class Page {
         catch (e) { return { ok: false, text: `could not assemble the video without ffmpeg: ${(e as Error).message} (frames kept in ${r.dir}; brew install ffmpeg, or set LANTERN_FFMPEG)` } }
       }
       fs.rmSync(r.dir, { recursive: true, force: true })
-      return { ok: true, text: `${out}\n(${Math.round(secs)}s of video from ${r.frames.length} captured changes${how})` }
+      return { ok: true, text: `${out}\n(${secs.toFixed(1)}s of video, from ${r.frames.length} frames the page painted${how})` }
     }
     return { ok: false, text: 'usage: lantern record start | caption <text> | stop' }
   }

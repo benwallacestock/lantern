@@ -4,15 +4,15 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern version               which lantern this is
   lantern snapshot              what is on the page that you can act on, each with a ref like e12
   lantern text [selector]       the page's visible text (or one element's)
-  lantern click <target>        target: a ref (e12), text=Exact label, a CSS selector, or x,y in page pixels (a canvas)
+  lantern click <target>        target: a ref (e12), text=Exact label, a CSS selector, or x,y in viewport pixels (a canvas)
   lantern dblclick <target> | rightclick <target> | hover <target>
   lantern drag <from> <to>      press at one target, carry to the other, let go (targets as for click)
-  lantern scroll <down|up|left|right> [px] [at <target>]   or: scroll to <target>
-  lantern fill <target> <text>  click the field and type over what's in it, key by key (a date, range or colour input is set directly)
+  lantern scroll <down|up|left|right> [px] [at <target>]   or: scroll to <target> · scroll top · scroll bottom
+  lantern fill <target> <text>  click the field and type over what's in it, key by key (a date, range or colour input is set directly; "" clears it)
   lantern type <text>           into whatever has focus (a canvas, an editor)
   lantern press <key>           Enter, Escape, Tab, ArrowDown…, a character, or cmd+a, shift+Tab, ctrl+Enter
   lantern select <target> <option…> · check <target> · uncheck <target> · upload <target> <file…>   (several options for a multi-select)
-  lantern get text|value|attr <name>|count|box <target> · is visible|enabled|checked <target>
+  lantern get text|value|attr <name>|style <property>|count|box <target> · is visible|enabled|checked <target>
   lantern wait <ms|text>        a pause (30s at most), or until that text is on the page (10s at most)
   lantern url · back · reload · console [--clear] · eval <js>
   lantern size [phone|tablet|laptop|desktop|wide|WxH]       the viewport (desktop, 1440×900, to start)

@@ -17,7 +17,7 @@ Open, look, act, look again. The snapshot is how you see; read it before you cli
 lantern open http://localhost:3000/walks   # a full URL the first time; after that `lantern open /settings`
 lantern snapshot              # what's on the page you can act on; each control has a ref like e12
 lantern click e12             # or: click "text=Save changes", a CSS selector, or 815,520 for a spot on a canvas
-lantern fill e7 "Large box"   # clicks the field and types over what's in it, key by key
+lantern fill e7 "Long beach"  # clicks the field and types over what's in it, key by key; `fill e7 ""` clears it
 lantern press Enter           # or Escape, Tab, ArrowDown, a character, cmd+a, shift+Tab, ctrl+Enter
 lantern text                  # the page's visible text, to confirm what it now says (or `text .selector`: every match, separated by ---)
 lantern screenshot            # prints a PNG path: open that file with your image tool and look at it
@@ -27,10 +27,10 @@ More, when you need them:
 
 ```bash
 lantern hover e12 · dblclick e12 · rightclick e12 · drag e12 e30 · drag 400,300 700,500
-lantern scroll down 500 · scroll up · scroll down 400 at e12 · scroll to e12
+lantern scroll down 500 · scroll up · scroll down 400 at e12 · scroll to e12 · scroll top · scroll bottom
 lantern type "free text"      # into whatever has focus — a canvas, an editor
 lantern select e7 "Express" · check e9 · uncheck e9 · upload e4 ./tmp/photo.jpg
-lantern get text|value|attr <name>|count|box <target> · is visible|enabled|checked <target>   # read or check one thing
+lantern get text|value|attr <name>|style <property>|count|box <target> · is visible|enabled|checked <target>   # read or check one thing (`get style background-color e3` for a computed colour)
 lantern wait 1500 · wait "Saved"   # a pause (30s at most), or until that text is on the page (10s at most)
 lantern url · back · reload · console [--clear] · eval <js>
 lantern size phone            # or tablet, laptop, desktop (1440×900, the start), wide, or 1200x800 — held until changed
@@ -45,7 +45,7 @@ lantern status · close        # is it up; close the browser (it closes itself a
 
 **Waiting.** After an action that loads or fetches, `lantern wait "text that should appear"` rather than a fixed sleep. A snapshot that says `(nothing to act on)` usually means the page is still loading. Clicks that submit a form or follow a link wait for the new page themselves.
 
-**Reading results.** `lantern text` is cheaper than a screenshot and tells you exactly what the page says (code shown in a textarea, as on GitHub, is in `get value` instead). `lantern console` lists console warnings and errors, uncaught exceptions, failed requests with their URLs, dialogs that were dismissed and files downloaded; it accumulates across pages, so `lantern console --clear` before a flow and `lantern console` after it shows just that flow's problems. Check it before declaring a flow works. Commands verify their result where they can: `check` says if the box didn't change, `fill` says if focus was stolen while typing, `click` says if a file was downloaded (into `tmp/lantern/downloads/`) or a new tab was opened in place.
+**Reading results.** `lantern text` is cheaper than a screenshot and tells you exactly what the page says (code shown in a textarea, as on GitHub, is in `get value` instead). `lantern console` lists console warnings and errors, uncaught exceptions, failed requests with their URLs, dialogs that were dismissed and files downloaded; it accumulates across pages, so `lantern console --clear` before a flow (it prints what it clears) and `lantern console` after it shows just that flow's problems. Check it before declaring a flow works. Commands verify their result where they can: `check` says if the box didn't change, `fill` says if focus was stolen while typing, `click` says if a file was downloaded (into `tmp/lantern/downloads/`) or a new tab was opened in place.
 
 **Dialogs, tabs and frames.** `alert`, `confirm` and `beforeunload` dialogs are accepted for you (a `prompt` with an empty answer) and noted in `console`. A link that opens a new tab is opened in the same page instead, and the click's output says so. The snapshot lists an iframe but doesn't look inside it, and `text`/`wait` don't either: click into the frame and `type`, or `eval` its `contentDocument`. A page built of `<frame>`s shows as such. HTTP basic auth can't be answered at the prompt: put the credentials in the URL.
 
@@ -71,9 +71,10 @@ gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'
 
 - Always give `--title`: it is drawn into the frame as its heading, so the image says what it shows wherever it ends up (the PR, Slack, a ticket). Say what the pair is of ("Checkout totals"), not "before and after".
 - Take the "before" first, on the base branch or before applying the change, so the pair really is a pair. Same `size` for both.
-- A callout says what the reviewer is looking at: `lantern callout "text=1.2 kW" "Now follows the terrain"` then `lantern screenshot`. Number them (`callout 1 …`, `callout 2 …`, a screenshot each) for a sequence. One callout at a time; `callout off` when done.
-- When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h` in viewport pixels. The whole page when the change is the page; `--full` for a page longer or wider than the screen. Don't crop by hand: the frame is the crop. Screenshots and highlights scroll the target into view; for a picture from the top, `lantern scroll to body` first. Pictures are 2x (a 1440×900 viewport gives a 2880×1800 PNG), the size a PR wants.
-- `--captions "Old|New"` to name the panels; `--note "SPR-123"` adds to the footer, `--footer "…"` replaces it; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override). The title carries a small lantern glyph in the accent colour.
+- A callout says what the reviewer is looking at: `lantern callout "text=2.0 h" "Now follows the terrain"` then `lantern screenshot`. The label goes wherever it covers the least (right, left, below or above the element) and the line starts just outside the glow; keep the words short, since a long label needs room. Number them (`callout 1 …`, `callout 2 …`, a screenshot each) for a sequence. One callout at a time; `callout off` when done.
+- A small app in a big viewport makes a mostly empty picture: screenshot a region (`lantern screenshot 300,80,840,600`) or set a smaller `size` before taking it.
+- When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h` in viewport pixels. The whole page when the change is the page; `--full` for a page longer or wider than the screen. Don't crop by hand: the frame is the crop. Screenshots and highlights scroll the target into view; for a picture from the top, `lantern scroll top` first. Pictures are 2x (a 1440×900 viewport gives a 2880×1800 PNG), the size a PR wants.
+- `--captions "Design|Built"` to name the panels (a design image can be a panel); `--note "SPR-123"` adds to the footer, `--footer "…"` replaces it (the branch shows only inside a git repo); `--out name.png` names the file; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override). The title carries a small lantern glyph in the accent colour.
 - Never commit anything from `tmp/lantern/`.
 
 For a change a still can't show — a drag, a flow across pages, something animating — record a demo: see the `lantern-demo-video` skill.

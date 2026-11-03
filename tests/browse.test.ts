@@ -85,6 +85,18 @@ test('press: Enter in a field, cmd+Enter, and typing into a contenteditable', as
   await ok('click', '#notes'); await ok('press', 'End'); await ok('type', 'typed here'); assert.match(await ok('get', 'value', '#notes'), /typed here$/)
   assert.match(await bad('press', 'Bogus'), /unknown key/)
 })
+test('scroll top and bottom; scroll to body means the top; fill with nothing clears; get style; text without lantern\'s own overlays', async () => {
+  await ok('open', '/long')
+  await ok('scroll', 'bottom'); assert.ok(Number(await ok('eval', 'scrollY')) > 1000)
+  await ok('scroll', 'top'); assert.equal(await ok('eval', 'scrollY'), '0')
+  await ok('scroll', 'bottom'); assert.match(await ok('scroll', 'to', 'body'), /scrolled to the top/); assert.equal(await ok('eval', 'scrollY'), '0')
+  await ok('open', '/')
+  await ok('fill', '#name', 'Something'); assert.match(await ok('fill', '#name', ''), /cleared "Walk name"/); assert.equal(await ok('get', 'value', '#name'), '')
+  assert.match(await ok('get', 'style', 'background-color', '#estimate'), /^rgb\(31, 111, 63\)$/)
+  await ok('fill', '#name', 'Overlay check')
+  assert.doesNotMatch(await ok('text'), /Overlay check\n\|/) // the keys bubble is lantern's, not the page's
+  assert.match(await bad('wait', 'Overlay check|'), /did not appear/)
+})
 test('get and is', async () => {
   assert.equal(await ok('get', 'attr', 'placeholder', '#name'), 'Walk name')
   assert.equal(await ok('get', 'count', '.card'), '4')
@@ -155,7 +167,7 @@ test('shadow DOM: the snapshot lists what is inside, and targets reach it', asyn
 })
 test('a callout: label, line and glow, numbered, following the element, off again', async () => {
   await ok('open', '/')
-  const out = await ok('callout', '2', '#result', 'The time, once estimated'); assert.match(out, /callout on "—": The time, once estimated/)
+  const out = await ok('callout', '2', '#result', 'The time, once estimated'); assert.match(out, /callout 2 on "—": The time, once estimated/)
   assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div") && !!document.getElementById("__lantern_co_svg")'), 'true')
   assert.match(await ok('eval', 'document.querySelectorAll("#__lantern_co_div")[1].textContent'), /2.*The time, once estimated/)
   assert.match(await ok('eval', 'document.getElementById("__lantern_co_svg").querySelector("path").getAttribute("d")'), /^M[\d.]+ [\d.]+ Q/)

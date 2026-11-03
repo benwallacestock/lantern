@@ -29,7 +29,7 @@ test('record a demo', async () => {
   await ok('scroll', 'down', '300')
   const out = await ok('record', 'stop')
   const f = firstLine(out); assert.ok(f.endsWith('.mp4') && fs.existsSync(f), out)
-  assert.match(out, /\(\d+s of video from \d+ captured changes/)
+  assert.match(out, /\(\d+\.\d+s of video, from \d+ frames/)
   assert.ok(fs.statSync(f).size > 20_000, 'the video has something in it')
   const p = await probe(f)
   if (p) { assert.match(p, /width=1920/); assert.match(p, /height=1200/); assert.ok(duration(p) >= 7.5, `captions hold: ${duration(p)}s`) } // three caption segments × 2.5s at least
@@ -58,7 +58,7 @@ test('record without ffmpeg: Chrome encodes the video', async () => {
 })
 test('a titled recording is framed: the video is bigger than the clip', async () => {
   await ok('open', '/')
-  assert.match(await ok('record', 'start', '--title', 'A framed demo', '--note', 'TRAIL-1'), /framed and titled "A framed demo"/)
+  assert.match(await ok("record", "start", "--title", "A framed demo", "--note", "TRAIL-1"), /in a frame titled "A framed demo"/)
   await ok('record', 'caption', 'Estimate'); await ok('click', 'text=Estimate time'); await ok('callout', '#result', 'The estimate'); await ok('wait', '400')
   const out = await ok('record', 'stop'); const f = firstLine(out); assert.match(out, /; framed/); assert.ok(fs.existsSync(f))
   const p = await probe(f)
