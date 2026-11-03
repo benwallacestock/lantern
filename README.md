@@ -2,7 +2,7 @@
 <h1 align="center">lantern</h1>
 <p align="center"><b>Let your agent see in the dark.</b><br>A command-line browser for coding agents.</p>
 
-> **Vibe coded, for your pleasure.** Claude wrote nearly all of this in a day while [Ben](https://github.com/benwallacestock) pointed, squinted and said "no, orange". It has a proper end-to-end test suite and it gets used for real, but it's still a lantern that was hung up yesterday: read the code before you trust it with anything precious, expect the odd rough edge, and send fixes. Humans and agents both welcome.
+> **Vibe coded, for your pleasure.** Claude wrote nearly all of this in a day while [Ben](https://github.com/benwallacestock) pointed, squinted and said "no, orange". It has a proper end-to-end test suite and it gets used for real, but it's still a lantern that was hung up yesterday. Point it at the app you're building and sites you control, not at other people's: it is for showing your own work, and it isn't a scraper. Expect the odd rough edge, and send fixes. Humans and agents both welcome.
 
 lantern is a CLI. Claude Code, Codex and anything else that can run a shell command use it to drive a real Chrome page: open, click, fill, read what it says. It takes screenshots that are ready for a pull request, records demo videos with captions and a visible pointer, and lets you watch the agent's page live from your own browser. It ships with skills that teach those agents when and how to use it.
 
