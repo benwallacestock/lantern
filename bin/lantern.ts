@@ -124,7 +124,7 @@ async function main() {
     if (!images.length) die('lantern frame: give a screenshot to frame (from `lantern screenshot`), or two for a before/after')
     req = { cmd: 'frame', images, title, captions, out, layout, scale, note, ...(footer !== undefined ? { footer } : {}), branch: git('rev-parse', '--abbrev-ref', 'HEAD') || undefined, cwd }
   } else {
-    req = { cmd: 'browser', args: argv, cwd }
+    req = { cmd: 'browser', args: argv, cwd, branch: git('rev-parse', '--abbrev-ref', 'HEAD') || undefined }
   }
   const reply = await ask(req)
   console.log(reply.text)

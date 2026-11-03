@@ -22,6 +22,7 @@ test('record a demo', async () => {
   assert.equal(await ok('eval', '!!document.getElementById("__lantern_mark")'), 'true', 'the mark is on while recording')
   await ok('record', 'caption', 'Name the room')
   await ok('fill', '#name', 'Demo walk')
+  assert.equal(await ok('eval', '!!document.getElementById("__lantern_keys")'), 'true', 'typing is shown in a bubble by the pointer')
   await ok('record', 'caption', 'Estimate')
   await ok('click', 'text=Estimate time'); await ok('wait', '500')
   await ok('highlight', '#result'); await ok('wait', '800'); await ok('highlight', 'off')
@@ -54,6 +55,15 @@ test('record without ffmpeg: Chrome encodes the video', async () => {
     const p = await probe(f)
     if (p) { assert.match(p, /codec_name=(h264|vp9|vp8|av1)/); assert.match(p, /width=1920/); assert.ok(duration(p) >= 4, `captions hold: ${duration(p)}s in ${p}`) }
   } finally { await lanternWith(NO, 'close'); await pause(300); await ok('open', app.url + '/') }
+})
+test('a titled recording is framed: the video is bigger than the clip', async () => {
+  await ok('open', '/')
+  assert.match(await ok('record', 'start', '--title', 'A framed demo', '--note', 'TRAIL-1'), /framed and titled "A framed demo"/)
+  await ok('record', 'caption', 'Estimate'); await ok('click', 'text=Estimate time'); await ok('callout', '#result', 'The estimate'); await ok('wait', '400')
+  const out = await ok('record', 'stop'); const f = firstLine(out); assert.match(out, /; framed/); assert.ok(fs.existsSync(f))
+  const p = await probe(f)
+  if (p) { const w = Number(/width=(\d+)/.exec(p)?.[1]), h = Number(/height=(\d+)/.exec(p)?.[1]); assert.ok(w > 1920 && h > 1200, `framed video is ${w}×${h}`) }
+  assert.match(await bad('record', 'start', '--bogus'), /takes --title/)
 })
 test('nothing recorded when nothing changes', async () => {
   await ok('record', 'start'); await ok('wait', '200')

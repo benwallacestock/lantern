@@ -12,11 +12,11 @@ The `lantern` skill covers the commands themselves; this one is how to make a re
 ## The shape of a good one
 
 1. **Plan the steps first.** Write them down: what the viewer sees at the start, each thing you'll do, what they see at the end. Under thirty seconds; five to eight captions. You can't watch it back, so get it right before you start. Rehearse the flow once without recording so every target is known.
-2. **Start on the starting state.** Open the page, set the size (`lantern size desktop`, or `phone`), log in if needed, wait for it to settle. Then `record start`. The size is fixed for the whole recording.
+2. **Start on the starting state.** Open the page, set the size (`lantern size desktop`, or `phone`), log in if needed, wait for it to settle. Then `record start --title \"What it shows\"`: the title frames the video with the lantern glyph and a footer (lantern, `--note`, the branch, the time; `--footer` to replace it), as `frame` does for a still. Without a title the video is the bare page. The size is fixed for the whole recording.
 3. **Caption first, then act.** A caption says what the viewer is about to see, in plain words, as they'd say it: "Drag the photo onto the album", not "Trigger onDrop". One caption per step. Each stays up at least 2.5 seconds, so don't repeat yourself.
 4. **Do it the way a user would.** `click` the button, `fill` the field (it types key by key, about ten characters a second, so keep values short: typing is what makes clips long), `press Enter`, `scroll down`, `drag` the thing. Never `eval`, never jump to a URL mid-flow with `open` when a user would click there. Every click is in the video. The pointer appears with the first mouse command.
 5. **Let results land.** After a step whose result takes a moment, `wait 1500` (or `wait "text that appears"`) so the result is recorded, then the next caption. `wait` is the one way to put stillness in the video, so use it on purpose and keep it short: a `wait 5000` is five seconds of nothing happening.
-6. **Point at information, not controls.** `highlight` a result the viewer should read — a figure, a message, a new row. Never the button you're about to click; the pointer shows that. `highlight off` when you move on.
+6. **Point at information, not controls.** `callout <target> "what it means"` puts the words beside a result the viewer should read — a figure, a message, a new row — joined to it by a line, with the element lit; `highlight` lights it without words. Never the button you're about to click; the pointer shows that. `callout off` / `highlight off` when you move on.
 7. **End on the finished state.** Last caption says what changed, hold it with `wait 2000`, then `record stop`. Time is compressed: a `wait` records at most about a second of stillness, and gaps between commands are cut, so a flow that took 40 seconds to drive comes out around 20. The video is 1920 pixels wide whatever the viewport.
 
 ## Commands
@@ -24,7 +24,7 @@ The `lantern` skill covers the commands themselves; this one is how to make a re
 ```bash
 lantern size desktop                                   # 1440×900 — or phone, tablet, laptop, wide
 lantern open /the/page && lantern wait 2000
-lantern record start
+lantern record start --title "Estimating a walk" --note "TRAIL-7"   # a title frames the video like a still: glyph, title, footer
 lantern record caption "Open the order and switch it to express delivery"
 lantern click "text=Order #1042"
 lantern wait 1500

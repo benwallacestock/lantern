@@ -4,6 +4,12 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+### Added
+- `callout <target> <words>`: the words beside an element, joined to it by a line, with the element lit; `callout 2 …` numbers it; in screenshots and recordings.
+- `record start --title "…" [--note] [--footer]`: the video gets a frame like a still, with the glyph, the title and the footer, from ffmpeg or from the Chrome encoder.
+- Typing is shown in a bubble by the pointer, each character popping in, with key combinations in the same bubble.
+- A `lantern-verify` skill: how to check a change works and matches its design, and leave evidence in the pull request.
+
 ### Changed
 - Recordings play at 24 frames a second and keep every frame Chrome paints; only actions keep a recording rolling, so an agent's reads between steps (`snapshot`, `text`) no longer record as pauses; `scroll to` scrolls visibly, with the wheel pill; a small "made with lantern" sits in the corner of a video (`watermark: false` to drop it).
 - The live view streams a lighter 1x picture at up to 25 frames a second while only watching (full quality when recording), drops frames for a slow viewer rather than lagging, and wears lantern's name and glyph.

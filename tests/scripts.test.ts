@@ -10,6 +10,7 @@ const samples: Record<string, string> = {
   CAPTION_JS: scripts.CAPTION_JS('A caption with "quotes" and \'apostrophes\''), CAPTION_OFF: scripts.CAPTION_JS(''),
   CURSOR_JS: scripts.CURSOR_JS(10, 20, 600), HIGHLIGHT_ON: scripts.HIGHLIGHT_JS(true), HIGHLIGHT_OFF: scripts.HIGHLIGHT_JS(false),
   CLICK_JS: scripts.CLICK_JS(1, 2, '#4cc3ff'), MARK_ON: scripts.MARK_JS(true), MARK_OFF: scripts.MARK_JS(false),
+  CALLOUT: scripts.CALLOUT_JS('The new total, with "quotes"', 2), CALLOUT_OFF: scripts.CALLOUT_JS(''),
   FX_HIDE: scripts.FX_JS(true), FX_SHOW: scripts.FX_JS(false), ACCENT_JS: scripts.ACCENT_JS('#123456'),
 }
 for (const [name, js] of Object.entries(samples)) test(`${name} parses`, () => { assert.doesNotThrow(() => new Function(js), `${name} does not parse`) })

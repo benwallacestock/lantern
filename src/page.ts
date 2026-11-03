@@ -12,16 +12,17 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
-import { ACCENT_JS, BLUE, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, MARK_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { ACCENT_JS, BLUE, CALLOUT_JS, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, MARK_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { USAGE } from './usage.ts'
 import { encodeInChrome } from './encode.ts'
+import { videoFrame } from './videoFrame.ts'
 import { hostAllowed, type Config } from './config.ts'
 
 export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
 type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; scroll?: { x: number; y: number } }
 /** A demo being recorded: every frame the page painted, with when it painted. Assembled on stop. */
-type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; marks: number[]; wrote: number; until: number }
+type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string }
 
 /** ms of recording after a command returns: the page reacting, a transition finishing. */
 export const SETTLE = 1500
@@ -35,6 +36,8 @@ const NAMED: Record<string, string> = { Equal: '=', Minus: '-', Plus: '+', Comma
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-')
 const pngSize = (b: Buffer) => ({ w: b.readUInt32BE(16), h: b.readUInt32BE(20) })
+/** A JPEG's size, from its first frame header (SOF0/SOF2). */
+const jpegSize = (b: Buffer) => { let i = 2; while (i < b.length - 9) { if (b[i] !== 0xff) { i++; continue } const m = b[i + 1]; if (m === 0xc0 || m === 0xc2) return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) }; i += 2 + b.readUInt16BE(i + 2) } return { w: 2880, h: 1800 } }
 /** Commands that put input into the page, after which a navigation is checked for. */
 const INPUT = new Set(['click', 'dblclick', 'rightclick', 'fill', 'press', 'type', 'check', 'uncheck', 'select', 'drag'])
 /** Input types a person sets through a picker rather than by typing. */
@@ -53,6 +56,7 @@ export class Page {
   popups: string[] = []
   rec?: Rec
   hl = false // a highlight the agent set (as opposed to one a screenshot lit for the picture)
+  co = false // a callout is up
   at?: { x: number; y: number } // where the pointer rests
   size: [number, number] = [REC_W, REC_H]
   fixed = false // a size the agent chose, kept for recordings
@@ -79,6 +83,7 @@ export class Page {
   /** Set when input dispatched to the page no longer arrives: the daemon restarts the browser. */
   dead = false
   private requests = new Map<string, string>() // requestId → url, to name a failed request
+  branch?: string // the project's git branch, for a video's frame; the CLI says
   private popupIds = new Set<string>()
   downloads: string[] = [] // files that arrived during the current command
   private pending = new Map<string, string>() // download guid → suggested name
@@ -455,6 +460,21 @@ export class Page {
         }
         return { ok: true, text: `highlighting "${name}"${this.several({ x: 0, y: 0, name, matches })} — it glows in screenshots and the recording, follows the element and goes when it does; \`lantern highlight off\` ends it` }
       }
+      case 'callout': {
+        // callout <target> <words> · callout 2 <target> <words> (numbered) · callout off
+        if (!rest[0]) return { ok: false, text: 'callout what? `lantern callout <target> <words>` — or `callout off`' }
+        if (rest[0] === 'off') { this.co = false; await this.evaluate(CALLOUT_JS('')).catch(() => {}); return { ok: true, text: 'callout off' } }
+        let n: number | undefined
+        if (/^\d{1,2}$/.test(rest[0]) && rest.length > 2) { n = Number(rest.shift()) }
+        if (rest.length < 2) return { ok: false, text: 'callout needs the words: `lantern callout <target> <what to say about it>`' }
+        const { rect: r, name } = await this.locate(rest[0])
+        const words = rest.slice(1).join(' ')
+        await this.evaluate(CALLOUT_JS(words, n)).catch(() => {}); this.co = true
+        // The pointer out of the way of what is being shown, as for a highlight.
+        const c = this.at
+        if (c && c.x >= r.x - 12 && c.x <= r.x + r.width + 12 && c.y >= r.y - 12 && c.y <= r.y + r.height + 12) { const [w, h] = this.size; await this.moveMouse(r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), Math.min(h - 12, r.y + r.height + 36), { settle: 300 }) }
+        return { ok: true, text: `callout on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
+      }
       case 'hover': {
         if (!rest[0]) return { ok: false, text: 'hover what? a ref, text=Label, a selector, or x,y' }
         const at = await this.spot(rest.join(' '))
@@ -614,17 +634,21 @@ export class Page {
     const what = rest[0]
     if (what === 'start') {
       if (this.rec) return { ok: false, text: `already recording (${this.rec.frames.length} frames so far) — \`lantern record stop\` first` }
+      // record start --title "What it shows" [--note ABC-123] [--footer "…"]: the video gets a frame, as a still does.
+      const opts: { title?: string; note?: string; footer?: string } = {}
+      const flat = rest.slice(1).flatMap((a) => (/^--(title|note|footer)=/.test(a) ? [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)] : [a]))
+      for (let i = 0; i < flat.length; i++) { const a = flat[i]; if (a === '--title') opts.title = flat[++i]; else if (a === '--note') opts.note = flat[++i]; else if (a === '--footer') opts.footer = flat[++i]; else return { ok: false, text: `record start takes --title, --note and --footer, not ${a}` } }
       const dir = path.join(this.outDir, `rec-${stamp()}`); fs.mkdirSync(dir, { recursive: true })
       const [rw, rh] = this.fixed ? this.size : [REC_W, REC_H]
       await this.setSize(rw, rh)
       await sleep(400) // let the page lay out at that size before the first frame
-      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity }
+      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, ...opts }
       if (this.config.watermark !== false) await this.evaluate(MARK_JS(true)).catch(() => {})
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
       await this.wantFrames()
-      return { ok: true, text: `recording at ${rw}×${rh} (the video comes out ${Math.min(1920, rw * SCALE)} pixels wide) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
+      return { ok: true, text: `recording at ${rw}×${rh} (the video comes out ${Math.min(1920, rw * SCALE)} pixels wide${opts.title ? `, framed and titled "${opts.title}"` : ''}) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
     }
     if (what === 'caption') {
       if (!this.rec) return { ok: false, text: 'not recording — `lantern record start` first' }
@@ -638,7 +662,8 @@ export class Page {
       const r = this.rec; if (!r) return { ok: false, text: 'not recording' }
       this.rec = undefined
       this.hl = false
-      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false) + ';' + MARK_JS(false)).catch(() => {})
+      this.co = false
+      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false) + ';' + CALLOUT_JS('') + ';' + MARK_JS(false)).catch(() => {})
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
@@ -659,16 +684,24 @@ export class Page {
       }
       const secs = durs.reduce((n, d) => n + d, 0)
       const base = path.join(this.outDir, `demo-${path.basename(r.dir).slice(4)}`)
-      let out: string, how = ''
+      // The clip's own size: at most 1920 wide, as before. With a title it sits in a frame, which is the video's size.
+      const { w: fw, h: fh } = jpegSize(fs.readFileSync(r.frames[0].file))
+      const innerW = Math.min(1920, fw) - (Math.min(1920, fw) % 2), innerH = Math.round((fh * innerW) / fw / 2) * 2
+      let frame: { png: Buffer; w: number; h: number; x: number; y: number } | undefined
+      if (r.title) { try { frame = await videoFrame(this.chrome, { innerW, innerH, title: r.title, note: r.note ?? this.config.note, branch: this.branch, footer: r.footer ?? this.config.footer, accent: this.config.accent }); fs.writeFileSync(path.join(r.dir, 'frame.png'), frame.png) } catch (e) { this.note(`could not draw the video's frame: ${(e as Error).message}`) } }
+      let out: string, how = frame ? '; framed' : ''
       if (await hasFfmpeg()) {
         const list = r.frames.map((f, i) => `file '${f.file.replace(/'/g, "'\\''")}'\nduration ${durs[i].toFixed(3)}`).join('\n') + `\nfile '${r.frames[r.frames.length - 1].file}'\n`
         const listFile = path.join(r.dir, 'list.txt'); fs.writeFileSync(listFile, list)
         out = `${base}.mp4`
-        const log = await tryOut(ffmpegBin(), ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '24', '-movflags', '+faststart', out])
+        const args = frame
+          ? ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-i', path.join(r.dir, 'frame.png'), '-filter_complex', `[0:v]scale=${innerW}:${innerH}[clip];[1:v][clip]overlay=${frame.x}:${frame.y},format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
+          : ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '24', '-movflags', '+faststart', out]
+        const log = await tryOut(ffmpegBin(), args)
         if (!fs.existsSync(out)) return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.slice(-300)}` : ''} (frames kept in ${r.dir})` }
       } else {
         // No ffmpeg: Chrome encodes it, in real time — as long as the clip is.
-        try { const enc = await encodeInChrome(this.chrome, r.frames.map((f) => f.file), durs, base); out = enc.file; how = `; encoded by Chrome as ${enc.mime.split(';')[0]} since ffmpeg is not installed — \`brew install ffmpeg\` for faster, smaller MP4s` }
+        try { const enc = await encodeInChrome(this.chrome, r.frames.map((f) => f.file), durs, base, frame && { file: path.join(r.dir, 'frame.png'), w: frame.w, h: frame.h, x: frame.x, y: frame.y, innerW, innerH }); out = enc.file; how += `; encoded by Chrome as ${enc.mime.split(';')[0]} since ffmpeg is not installed — \`brew install ffmpeg\` for faster, smaller MP4s` }
         catch (e) { return { ok: false, text: `could not assemble the video without ffmpeg: ${(e as Error).message} (frames kept in ${r.dir}; brew install ffmpeg, or set LANTERN_FFMPEG)` } }
       }
       fs.rmSync(r.dir, { recursive: true, force: true })

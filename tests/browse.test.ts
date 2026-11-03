@@ -153,6 +153,17 @@ test('shadow DOM: the snapshot lists what is inside, and targets reach it', asyn
   await ok('fill', '#sname', 'from outside'); assert.equal(await ok('get', 'value', '#sname'), 'from outside')
   await ok('click', 'text=Shadow button'); assert.equal(await ok('text', '#out'), 'shadow clicked: from outside')
 })
+test('a callout: label, line and glow, numbered, following the element, off again', async () => {
+  await ok('open', '/')
+  const out = await ok('callout', '2', '#result', 'The time, once estimated'); assert.match(out, /callout on "—": The time, once estimated/)
+  assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div") && !!document.getElementById("__lantern_co_svg")'), 'true')
+  assert.match(await ok('eval', 'document.querySelectorAll("#__lantern_co_div")[1].textContent'), /2.*The time, once estimated/)
+  assert.match(await ok('eval', 'document.getElementById("__lantern_co_svg").querySelector("path").getAttribute("d")'), /^M[\d.]+ [\d.]+ Q/)
+  await ok('click', 'text=Estimate time') // the element changes; the callout stays with it
+  assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div")'), 'true')
+  await ok('callout', 'off'); assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div")'), 'false')
+  assert.match(await bad('callout', '#result'), /needs the words/)
+})
 test('a covered button is refused, not "clicked"', async () => {
   await ok('open', '/overlay')
   assert.match(await bad('click', 'text=Covered button'), /covered by div#veil/)

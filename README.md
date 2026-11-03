@@ -54,7 +54,8 @@ npx skills add benwallacestock/lantern
 
 - **Drive the page** as a person would: real mouse and key events through the DevTools protocol, so the page sees mousedown, keydown and input, not synthetic clicks. `snapshot` lists what can be acted on, with refs; `click`, `fill`, `press`, `drag`, `scroll`, `select`, `check`, `upload`, `hover`; `text`, `get`, `is`, `wait`, `console`, `eval`.
 - **Screenshots at 2x**, like a Retina screen: the whole viewport, the page with one element glowing, a crop of one element, or the whole page however long. `size` picks phone, tablet, laptop, desktop or wide.
-- **Frames for a pull request**: one picture, a before/after pair, or numbered steps, with a title drawn in, rounded corners, a shadow, and the branch and time in the footer.
+- **Callouts**: the words beside an element, joined to it by a line, the element lit, numbered if you like; in screenshots and recordings.
+- **Frames for a pull request**: one picture, a before/after pair, or numbered steps, with a title drawn in, rounded corners, a shadow, and the branch and time in the footer. A recording started with `--title` gets the same frame as a video.
 - **Demo videos**: frames are kept only while a command runs and for a beat after, so the agent's thinking between commands is cut; captions hold for at least 2.5 seconds; the pointer glides to each target; a ring and a little mouse show each click; a keycap strip shows typing; a pill shows scrolling. ffmpeg assembles an MP4 when it is installed; otherwise Chrome encodes the video itself (MP4 where it can, WebM otherwise; GitHub plays both inline).
 
 - **A live view** for a person: `lantern watch` opens a page in your own browser showing what the agent's page paints, with a line saying what it just did. Tools that embed lantern (forest's Agent Browser panel) get the same frames as JSON lines over the daemon's socket.
@@ -89,7 +90,8 @@ Most projects need none. A `.lantern.json` at the project root, or the same keys
 - `src/pageScripts.ts` — what runs inside the page: the snapshot, locating targets, and the overlays (caption, pointer, highlight, keycaps, mouse).
 - `src/frame.ts` — the PR frame, rendered by Chrome itself.
 - `src/encode.ts` — the video, encoded by Chrome when there is no ffmpeg.
-- `skills/` — the skills for Claude Code and Codex.
+- `src/videoFrame.ts` — the frame around a titled video.
+- `skills/` — the skills for Claude Code and Codex: `lantern`, `lantern-demo-video`, and `lantern-verify` (how to check a change works and matches its design).
 
 State lives in `~/.lantern` (`LANTERN_HOME` to move it): a profile per project (so logins persist), a socket, a log.
 

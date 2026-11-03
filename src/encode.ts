@@ -10,22 +10,23 @@ import type { Chrome } from './cdp.ts'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-const page = (files: string[], durs: number[]) => `<!doctype html><meta charset="utf-8"><title>lantern encoder</title><canvas id="c"></canvas><script>
-const FRAMES = ${JSON.stringify(files)}, DURS = ${JSON.stringify(durs)}, MAXW = 1920
+const page = (files: string[], durs: number[], frame?: { w: number; h: number; x: number; y: number; innerW: number; innerH: number }) => `<!doctype html><meta charset="utf-8"><title>lantern encoder</title><canvas id="c"></canvas><script>
+const FRAMES = ${JSON.stringify(files)}, DURS = ${JSON.stringify(durs)}, MAXW = 1920, FRAME = ${JSON.stringify(frame ?? null)}
 window.__status = 'loading'
 ;(async () => {
   try {
     const imgs = await Promise.all(FRAMES.map((f) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('could not load ' + f)); i.src = f })))
     const w0 = imgs[0].naturalWidth, h0 = imgs[0].naturalHeight, k = Math.min(1, MAXW / w0)
-    const c = document.getElementById('c'); c.width = Math.round(w0 * k / 2) * 2; c.height = Math.round(h0 * k / 2) * 2
+    const c = document.getElementById('c'); c.width = FRAME ? FRAME.w : Math.round(w0 * k / 2) * 2; c.height = FRAME ? FRAME.h : Math.round(h0 * k / 2) * 2
     const ctx = c.getContext('2d')
+    const bg = FRAME ? await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('could not load the frame')); i.src = 'frame.png' }) : null
     const stream = c.captureStream(0), track = stream.getVideoTracks()[0]
     const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m))
     if (!mime) throw new Error('this Chrome cannot record video')
     const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 })
     const chunks = []; rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
     const stopped = new Promise((res) => { rec.onstop = res })
-    const draw = (i) => { ctx.drawImage(imgs[i], 0, 0, c.width, c.height); track.requestFrame() }
+    const draw = (i) => { if (bg) { ctx.drawImage(bg, 0, 0); ctx.drawImage(imgs[i], FRAME.x, FRAME.y, FRAME.innerW, FRAME.innerH) } else ctx.drawImage(imgs[i], 0, 0, c.width, c.height); track.requestFrame() }
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     draw(0); rec.start(1000); window.__status = 'encoding'
     const t0 = performance.now(); let at = 0
@@ -52,16 +53,16 @@ function serve(dir: string, html: string): Promise<{ url: string; close: () => v
     const name = path.basename(decodeURIComponent((req.url ?? '/').split('?')[0]))
     if (req.url === '/' || !name) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(html) }
     const file = path.join(dir, name)
-    if (!/^f-\d+\.jpg$/.test(name) || !fs.existsSync(file)) { res.writeHead(404); return res.end() }
-    res.writeHead(200, { 'Content-Type': 'image/jpeg' }); fs.createReadStream(file).pipe(res)
+    if (!/^(f-\d+\.jpg|frame\.png)$/.test(name) || !fs.existsSync(file)) { res.writeHead(404); return res.end() }
+    res.writeHead(200, { 'Content-Type': name.endsWith('.png') ? 'image/png' : 'image/jpeg' }); fs.createReadStream(file).pipe(res)
   })
   return new Promise((r) => server.listen(0, '127.0.0.1', () => r({ url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/`, close: () => server.close() })))
 }
 
 /** Frames (JPEG files in one folder) and how long each shows, to a video file next to `outBase` (the extension is chosen). */
-export async function encodeInChrome(chrome: Chrome, frames: string[], durs: number[], outBase: string): Promise<{ file: string; mime: string }> {
+export async function encodeInChrome(chrome: Chrome, frames: string[], durs: number[], outBase: string, frame?: { file: string; w: number; h: number; x: number; y: number; innerW: number; innerH: number }): Promise<{ file: string; mime: string }> {
   const dir = path.dirname(frames[0])
-  const site = await serve(dir, page(frames.map((f) => path.basename(f)), durs))
+  const site = await serve(dir, page(frames.map((f) => path.basename(f)), durs, frame))
   const total = durs.reduce((n, d) => n + d, 0)
   // Its own window: a tab in the background captures no frames from its canvas, and the recorder writes nothing.
   const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank', newWindow: true, width: 1280, height: 800 })

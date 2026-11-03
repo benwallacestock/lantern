@@ -17,7 +17,7 @@ let P: ReturnType<typeof paths>
 let CONFIG: ReturnType<typeof readConfig>
 const IDLE = 30 * 60_000
 /** Commands whose outcome a watcher is told about, in words. */
-const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
+const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'callout', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
 /** Commands a recording keeps rolling for: things that happen on the page. A snapshot or a text read between
  * steps is the agent looking, not the user doing, and is cut from the video like any other thinking. */
 const RECORDS = new Set([...ACTS, 'record'])
@@ -62,6 +62,7 @@ async function dispatch(req: any): Promise<Reply> {
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
     case 'browser': {
       const p = await thePage()
+      if (req.branch) p.branch = req.branch
       const args: string[] = req.args ?? []
       const rolling = RECORDS.has(args[0])
       if (p.rec && rolling) p.rec.until = Infinity // frames are kept while an action runs…
