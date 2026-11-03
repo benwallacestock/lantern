@@ -4,6 +4,8 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+## 0.1.2 — 2026-11-03
+
 ### Changed
 - The npm package is `@benwallacestock/lantern` (0.1.1 was tagged before the rename and never reached npm).
 
