@@ -7,7 +7,7 @@ description: Use the app you are working on in a real browser with the `lantern`
 
 `lantern` drives a real Chrome page for you, with no window. Each command is an ordinary shell command and prints what happened; the page stays open between commands, however long you take between them. Run it from anywhere inside the project: the browser is per project, and pictures go in `tmp/lantern/` at the project root (kept out of git for you).
 
-Check it is there with `lantern help`. If the command is not found: `npm install -g @spruceeco/lantern` (needs Node 22.18+ and a Chrome on the machine; `brew install ffmpeg` for video). If that is not possible, say so rather than reaching for another browser.
+Check it is there with `lantern help`. If the command is not found: `npm install -g github:benwallacestock/lantern` puts it on the PATH (needs Node 22.18+ and a Chrome on the machine). Inside Claude Code the plugin carries the CLI too, so `node "${CLAUDE_PLUGIN_ROOT}/bin/lantern.ts" <command>` works in place of `lantern` without installing anything. If neither is possible, say so rather than reaching for another browser. ffmpeg is optional: videos are assembled faster with it, and by Chrome without it.
 
 ## The loop
 
@@ -87,7 +87,7 @@ Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`
 ## If something is wrong
 
 - `lantern needs a Chrome`: install Google Chrome (or Chromium, Edge, Brave), or set `LANTERN_CHROME` to one.
-- `recording needs ffmpeg`: `brew install ffmpeg` (or `apt install ffmpeg`), or set `LANTERN_FFMPEG`.
+- `could not assemble the video without ffmpeg`: Chrome couldn't encode it; `brew install ffmpeg` (or `apt install ffmpeg`), or set `LANTERN_FFMPEG`, and record again.
 - `did not load`: nothing answers at that URL. Start the app, or check the port.
 - `no element e12 — refs come from the last snapshot`: the page changed; snapshot again.
 - `lantern could not start`: its log is named in the message. Node must be 22.18 or newer.

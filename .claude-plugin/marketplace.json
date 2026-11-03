@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "lantern",
-      "description": "Skills for the lantern CLI: browse the app you are working on, take pictures a reviewer can use, record a captioned demo.",
+      "description": "The lantern CLI and its skills: browse the app you are working on, take pictures a reviewer can use, record a captioned demo.",
       "source": "./",
       "category": "development"
     }

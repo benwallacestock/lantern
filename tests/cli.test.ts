@@ -15,7 +15,8 @@ const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-proj-'))
 let app: { url: string; close: () => void }
 
 type Run = { ok: boolean; out: string }
-const lantern = (...args: string[]): Promise<Run> => new Promise((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj, env: { ...process.env, LANTERN_HOME: home }, maxBuffer: 1 << 24 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+const lantern = (...args: string[]): Promise<Run> => lanternWith({}, ...args)
+const lanternWith = (env: Record<string, string>, ...args: string[]): Promise<Run> => new Promise((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj, env: { ...process.env, LANTERN_HOME: home, ...env }, maxBuffer: 1 << 24, timeout: 180_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
 const ok = async (...args: string[]) => { const r = await lantern(...args); assert.ok(r.ok, `lantern ${args.join(' ')} failed: ${r.out}`); return r.out }
 const bad = async (...args: string[]) => { const r = await lantern(...args); assert.ok(!r.ok, `lantern ${args.join(' ')} should have failed: ${r.out}`); return r.out }
 const pngSize = (f: string) => { const b = Buffer.alloc(24); const fd = fs.openSync(f, 'r'); fs.readSync(fd, b, 0, 24, 0); fs.closeSync(fd); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) } }
@@ -235,6 +236,25 @@ test('record a demo', async () => {
   assert.ok(!fs.existsSync(path.dirname(f) + '/' + path.basename(f, '.mp4').replace('demo-', 'rec-')), 'frames folder removed')
   assert.match(await bad('record', 'stop'), /not recording/)
   assert.match(await bad('record', 'caption', 'x'), /not recording/)
+})
+test('record without ffmpeg: Chrome encodes the video', async () => {
+  // The daemon reads its environment when it starts: restart it with ffmpeg pointed nowhere.
+  await ok('close'); await new Promise((r) => setTimeout(r, 300))
+  const NO = { LANTERN_FFMPEG: '/nonexistent/ffmpeg' }
+  try {
+    let r = await lanternWith(NO, 'open', app.url + '/'); assert.ok(r.ok, r.out)
+    r = await lanternWith(NO, 'record', 'start'); assert.ok(r.ok, r.out)
+    await lanternWith(NO, 'record', 'caption', 'Encoded by Chrome')
+    await lanternWith(NO, 'fill', '#name', 'No ffmpeg')
+    await lanternWith(NO, 'click', 'text=Calculate demand')
+    r = await lanternWith(NO, 'record', 'stop'); assert.ok(r.ok, r.out)
+    const f = firstLine(r.out); assert.match(f, /\.(mp4|webm)$/); assert.ok(fs.existsSync(f))
+    assert.match(r.out, /encoded by Chrome/)
+    assert.ok(fs.statSync(f).size > 20_000, 'the video has something in it')
+    const probe = await sh('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height,duration', '-show_entries', 'format=duration', '-of', 'default=nw=1', f])
+    assert.match(probe, /codec_name=(h264|vp9|vp8|av1)/); assert.match(probe, /width=1920/)
+    const dur = Number(/duration=([\d.]+)/.exec(probe)?.[1]); assert.ok(dur >= 4, `captions hold: ${dur}s in ${probe}`)
+  } finally { await lanternWith(NO, 'close'); await new Promise((r) => setTimeout(r, 300)); await ok('open', app.url + '/') }
 })
 test('nothing recorded when nothing changes', async () => {
   await ok('record', 'start'); await ok('wait', '200')

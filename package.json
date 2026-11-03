@@ -1,5 +1,5 @@
 {
-  "name": "@spruceeco/lantern",
+  "name": "lantern-browser",
   "version": "0.1.0",
   "description": "A browser for coding agents: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer.",
   "license": "MIT",
@@ -11,14 +11,17 @@
     "bin",
     "src",
     "skills",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "logo.svg"
   ],
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test tests/cli.test.ts"
+    "test": "node --test tests/cli.test.ts",
+    "release": "node scripts/release.ts"
   },
   "keywords": [
     "browser",
@@ -33,5 +36,12 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/benwallacestock/lantern.git"
+  },
+  "homepage": "https://github.com/benwallacestock/lantern",
+  "bugs": "https://github.com/benwallacestock/lantern/issues",
+  "private": false
 }

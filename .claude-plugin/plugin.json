@@ -1,8 +1,8 @@
 {
   "name": "lantern",
-  "description": "A browser for coding agents: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer. Skills for the `lantern` CLI.",
+  "description": "The lantern CLI, a browser for coding agents, and the skills that teach Claude to use it: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer.",
   "version": "0.1.0",
   "author": { "name": "Spruce" },
-  "homepage": "https://github.com/SpruceEco/lantern",
+  "homepage": "https://github.com/benwallacestock/lantern",
   "keywords": ["browser", "screenshot", "demo", "video", "pull-request", "codex", "claude-code"]
 }

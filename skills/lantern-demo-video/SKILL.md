@@ -7,7 +7,7 @@ description: Record a short demo video of a change in the app with `lantern reco
 
 A recording is a person using the app, and a human has to be able to follow it. The recorder only keeps frames while a `lantern` command runs (and a moment after), so your thinking between commands is cut out. Everything the viewer needs is drawn into the video for you: a caption along the bottom, the pointer gliding to each target, an orange ring and a little mouse as a click lands, the keys as you type them, a pill when you scroll, a glowing box around anything you highlight.
 
-Needs ffmpeg (`brew install ffmpeg`, or `LANTERN_FFMPEG=/path`). The `lantern` skill covers the commands themselves; this one is how to make a recording a reviewer will watch.
+The `lantern` skill covers the commands themselves; this one is how to make a recording a reviewer will watch. ffmpeg is optional: with it the MP4 is assembled in a second; without it Chrome encodes the clip itself, which takes as long as the clip is.
 
 ## The shape of a good one
 
@@ -49,3 +49,4 @@ Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the d
 - `nothing was recorded`: the page never changed while recording. Something must happen on screen between `start` and `stop`.
 - `already recording`: a previous recording was never stopped. `lantern record stop`, then start again.
 - `the size is fixed while recording`: set `size` before `record start`.
+- `could not assemble the video without ffmpeg`: Chrome couldn't encode it; `brew install ffmpeg` (or `apt install ffmpeg`), and record again.

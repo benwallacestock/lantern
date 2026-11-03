@@ -1,0 +1,31 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Check the tag matches package.json
+        run: |
+          V=$(node -p "require('./package.json').version")
+          [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} but package.json says $V"; exit 1; }
+      - name: Release notes from CHANGELOG.md
+        run: node scripts/release.ts notes "${GITHUB_REF_NAME#v}" > notes.md && cat notes.md
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          PRE=""; case "$V" in 0.*) PRE="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" --title "lantern $V" --notes-file notes.md $PRE

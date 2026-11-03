@@ -1,0 +1,29 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # The runner has Google Chrome and ffmpeg already; the suite also covers the no-ffmpeg path itself.
+      - run: google-chrome --version && ffmpeg -version | head -1
+      - run: npm test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lantern-logs-node${{ matrix.node }}
+          path: /tmp/lantern-home-*/log/
+          if-no-files-found: ignore

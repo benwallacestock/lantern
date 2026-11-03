@@ -13,6 +13,7 @@ import path from 'node:path'
 import type { Chrome } from './cdp.ts'
 import { BLUE, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { USAGE } from './usage.ts'
+import { encodeInChrome } from './encode.ts'
 import { hostAllowed, type Config } from './config.ts'
 
 export type Reply = { ok: boolean; text: string }
@@ -467,7 +468,6 @@ export class Page {
     const what = rest[0]
     if (what === 'start') {
       if (this.rec) return { ok: false, text: `already recording (${this.rec.frames.length} frames so far) — \`lantern record stop\` first` }
-      if (!(await hasFfmpeg())) return { ok: false, text: 'recording needs ffmpeg, which is not installed: brew install ffmpeg (or apt install ffmpeg), or set LANTERN_FFMPEG' }
       const dir = path.join(this.outDir, `rec-${stamp()}`); fs.mkdirSync(dir, { recursive: true })
       const [rw, rh] = this.fixed ? this.size : [REC_W, REC_H]
       await this.setSize(rw, rh)
@@ -508,14 +508,22 @@ export class Page {
         const have = idx.reduce((n, i) => n + durs[i], 0)
         if (have < HOLD) durs[idx[idx.length - 1]] += HOLD - have
       }
-      const list = r.frames.map((f, i) => `file '${f.file.replace(/'/g, "'\\''")}'\nduration ${durs[i].toFixed(3)}`).join('\n') + `\nfile '${r.frames[r.frames.length - 1].file}'\n`
-      const listFile = path.join(r.dir, 'list.txt'); fs.writeFileSync(listFile, list)
-      const out = path.join(this.outDir, `demo-${path.basename(r.dir).slice(4)}.mp4`)
-      const log = await tryOut(ffmpegBin(), ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '30', '-movflags', '+faststart', out])
-      if (!fs.existsSync(out)) return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.slice(-300)}` : ''} (frames kept in ${r.dir})` }
-      fs.rmSync(r.dir, { recursive: true, force: true })
       const secs = durs.reduce((n, d) => n + d, 0)
-      return { ok: true, text: `${out}\n(${Math.round(secs)}s, ${r.frames.length} frames)` }
+      const base = path.join(this.outDir, `demo-${path.basename(r.dir).slice(4)}`)
+      let out: string, how = ''
+      if (await hasFfmpeg()) {
+        const list = r.frames.map((f, i) => `file '${f.file.replace(/'/g, "'\\''")}'\nduration ${durs[i].toFixed(3)}`).join('\n') + `\nfile '${r.frames[r.frames.length - 1].file}'\n`
+        const listFile = path.join(r.dir, 'list.txt'); fs.writeFileSync(listFile, list)
+        out = `${base}.mp4`
+        const log = await tryOut(ffmpegBin(), ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '30', '-movflags', '+faststart', out])
+        if (!fs.existsSync(out)) return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.slice(-300)}` : ''} (frames kept in ${r.dir})` }
+      } else {
+        // No ffmpeg: Chrome encodes it, in real time — as long as the clip is.
+        try { const enc = await encodeInChrome(this.chrome, r.frames.map((f) => f.file), durs, base); out = enc.file; how = `; encoded by Chrome as ${enc.mime.split(';')[0]} since ffmpeg is not installed — \`brew install ffmpeg\` for faster, smaller MP4s` }
+        catch (e) { return { ok: false, text: `could not assemble the video without ffmpeg: ${(e as Error).message} (frames kept in ${r.dir}; brew install ffmpeg, or set LANTERN_FFMPEG)` } }
+      }
+      fs.rmSync(r.dir, { recursive: true, force: true })
+      return { ok: true, text: `${out}\n(${Math.round(secs)}s, ${r.frames.length} frames${how})` }
     }
     return { ok: false, text: 'usage: lantern record start | caption <text> | stop' }
   }
