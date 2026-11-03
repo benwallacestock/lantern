@@ -1,12 +1,12 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "glade",
-  "description": "glade: a browser for coding agents, with screenshots and demo videos ready for a pull request",
+  "name": "lantern",
+  "description": "lantern: a browser for coding agents, with screenshots and demo videos ready for a pull request",
   "owner": { "name": "Spruce" },
   "plugins": [
     {
-      "name": "glade",
-      "description": "Skills for the glade CLI: browse the app you are working on, take pictures a reviewer can use, record a captioned demo.",
+      "name": "lantern",
+      "description": "Skills for the lantern CLI: browse the app you are working on, take pictures a reviewer can use, record a captioned demo.",
       "source": "./",
       "category": "development"
     }

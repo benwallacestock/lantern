@@ -27,9 +27,9 @@ const cached = (): string[] => {
   return out
 }
 
-/** The Chrome to use: GLADE_CHROME, then the usual places, then a test-tool download. */
+/** The Chrome to use: LANTERN_CHROME, then the usual places, then a test-tool download. */
 export function findChrome(): string | null {
-  const env = process.env.GLADE_CHROME
+  const env = process.env.LANTERN_CHROME
   if (env) return fs.existsSync(env) ? env : null
   const fixed = process.platform === 'darwin' ? MAC : process.platform === 'win32' ? WIN : []
   for (const f of fixed) if (fs.existsSync(f)) return f
@@ -38,7 +38,7 @@ export function findChrome(): string | null {
   return null
 }
 
-export const NO_CHROME = 'glade needs a Chrome and found none. Install Google Chrome (or Chromium, Edge, Brave), or point GLADE_CHROME at one.'
+export const NO_CHROME = 'lantern needs a Chrome and found none. Install Google Chrome (or Chromium, Edge, Brave), or point LANTERN_CHROME at one.'
 
 export function launchChrome(bin: string, profile: string, log: number | 'inherit' = 'inherit'): Chrome {
   fs.mkdirSync(profile, { recursive: true })

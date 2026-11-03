@@ -11,8 +11,9 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
-import { AMBER, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, GREEN, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { BLUE, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, ORANGE, HIGHLIGHT_JS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { USAGE } from './usage.ts'
+import { hostAllowed, type Config } from './config.ts'
 
 export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
@@ -30,7 +31,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-')
 const pngSize = (b: Buffer) => ({ w: b.readUInt32BE(16), h: b.readUInt32BE(20) })
 
-export const ffmpegBin = () => process.env.GLADE_FFMPEG || [process.env.HOME + '/.local/bin/ffmpeg', '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find((f) => fs.existsSync(f)) || 'ffmpeg'
+export const ffmpegBin = () => process.env.LANTERN_FFMPEG || [process.env.HOME + '/.local/bin/ffmpeg', '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find((f) => fs.existsSync(f)) || 'ffmpeg'
 const hasFfmpeg = () => new Promise<boolean>((res) => execFile(ffmpegBin(), ['-version'], (e) => res(!e)))
 const tryOut = (bin: string, args: string[]) => new Promise<string>((res) => execFile(bin, args, { maxBuffer: 1 << 24 }, (e, so, se) => res(String(se || so || (e ? e.message : '')))))
 
@@ -47,24 +48,49 @@ export class Page {
   size: [number, number] = [1280, 800]
   fixed = false // a size the agent chose, kept for recordings
   failed?: string
+  /** Where relative paths resolve: the origin of the last page that loaded. Remembered across daemons. */
+  base?: string
+  config: Config = {}
+  private stateFile?: string
+  /** Whoever is watching the page: each gets every frame it paints (at most ~8 a second) and a line for each action. */
+  watchers = new Set<{ frame?: (jpeg: Buffer, url: string) => void; did?: (text: string) => void }>()
+  lastFrame?: Buffer
+  private sentAt = 0
+  private screencast = false
+  currentUrl = 'about:blank'
   private onLoad?: () => void
+  private mainFrame = ''
+  /** A navigation of the main frame is under way (a click submitted a form, a link was followed). */
+  loading = false
   private popupIds = new Set<string>()
 
-  constructor(chrome: Chrome, outDir: string) { this.chrome = chrome; this.outDir = outDir }
+  constructor(chrome: Chrome, outDir: string, stateFile?: string, config: Config = {}) {
+    this.chrome = chrome; this.outDir = outDir; this.stateFile = stateFile; this.config = config
+    this.base = config.url
+    if (!this.base && stateFile) { try { this.base = JSON.parse(fs.readFileSync(stateFile, 'utf8')).base } catch {} }
+  }
 
-  static async open(chrome: Chrome, outDir: string): Promise<Page> {
-    const p = new Page(chrome, outDir)
+  static async open(chrome: Chrome, outDir: string, stateFile?: string, config: Config = {}): Promise<Page> {
+    const p = new Page(chrome, outDir, stateFile, config)
     const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' })
     const { sessionId } = await chrome.send<{ sessionId: string }>('Target.attachToTarget', { targetId, flatten: true })
     p.targetId = targetId; p.session = sessionId
     chrome.on((sid, method, params) => p.event(sid, method, params))
     await p.cdp('Page.enable'); await p.cdp('Runtime.enable'); await p.cdp('Network.enable')
+    p.mainFrame = (await p.cdp<{ frameTree: { frame: { id: string } } }>('Page.getFrameTree')).frameTree.frame.id
+    // A host list: every page-level request is looked at before it goes out, and one to anywhere else fails.
+    if (config.hosts?.length) await p.cdp('Fetch.enable', { patterns: [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Request' }] })
     await chrome.send('Target.setDiscoverTargets', { discover: true })
     await p.setSize(...p.size)
+    if (stateFile) { try { const saved = JSON.parse(fs.readFileSync(path.join(path.dirname(stateFile), 'cookies.json'), 'utf8')); await p.cookiesIn(saved) } catch {} }
     return p
   }
 
   cdp<T = any>(method: string, params: object = {}, ms = 10_000): Promise<T> { return this.chrome.send<T>(method, params, this.session, ms) }
+  /** Every cookie the browser holds, and putting them back: session cookies die with Chrome, so a login would
+   * otherwise last only until the daemon's next idle stop. Saved on stop, restored on start. */
+  async cookiesOut(): Promise<object[]> { return (await this.chrome.send<{ cookies: any[] }>('Storage.getCookies')).cookies.map((c) => ({ name: c.name, value: c.value, domain: c.domain, path: c.path, secure: c.secure, httpOnly: c.httpOnly, sameSite: c.sameSite, expires: c.expires, priority: c.priority, sourceScheme: c.sourceScheme, sourcePort: c.sourcePort, ...(c.partitionKey ? { partitionKey: c.partitionKey } : {}) })) }
+  async cookiesIn(cookies: object[]) { if (cookies.length) await this.chrome.send('Storage.setCookies', { cookies }) }
   async evaluate<T = any>(expression: string): Promise<T> {
     const r = await this.cdp<{ result: { value: T }; exceptionDetails?: { exception?: { description?: string }; text?: string } }>('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text ?? 'the script threw')
@@ -72,7 +98,7 @@ export class Page {
   }
   /** Something drawn for the viewer: never in the way of the command itself. */
   fire(js: string) { void this.evaluate(js).catch(() => {}) }
-  hud(call: string) { this.fire(`${HUD_JS}; window.__gladeHud.${call}`) }
+  hud(call: string) { this.fire(`${HUD_JS}; window.__lanternHud.${call}`) }
   note(line: string) { this.log.push(`${new Date().toISOString().slice(11, 19)} ${line}`); if (this.log.length > 300) this.log.splice(0, this.log.length - 300) }
 
   private event(sid: string | undefined, method: string, params: any) {
@@ -86,14 +112,26 @@ export class Page {
     switch (method) {
       case 'Page.screencastFrame': {
         void this.cdp('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {})
-        // Keep the frame (at most ~12 a second). The page only paints when something changed, so a pause in the
-        // agent's thinking leaves a gap in the timestamps, not a run of identical frames.
-        const r = this.rec, now = Date.now()
-        if (r && now <= r.until && now - r.wrote >= 80) { r.wrote = now; const file = path.join(r.dir, `f-${String(r.frames.length).padStart(5, '0')}.jpg`); r.frames.push({ file, t: now }); fs.writeFile(file, Buffer.from(params.data, 'base64'), () => {}) }
+        const jpeg = Buffer.from(params.data, 'base64'), now = Date.now()
+        // Recording: keep the frame (at most ~12 a second). The page only paints when something changed, so a pause
+        // in the agent's thinking leaves a gap in the timestamps, not a run of identical frames.
+        const r = this.rec
+        if (r && now <= r.until && now - r.wrote >= 80) { r.wrote = now; const file = path.join(r.dir, `f-${String(r.frames.length).padStart(5, '0')}.jpg`); r.frames.push({ file, t: now }); fs.writeFile(file, jpeg, () => {}) }
+        // Watching: the latest frame to everyone looking, at most ~8 a second.
+        this.lastFrame = jpeg
+        if (this.watchers.size && now - this.sentAt > 120) { this.sentAt = now; for (const w of this.watchers) w.frame?.(jpeg, this.currentUrl) }
         break
       }
-      case 'Page.loadEventFired': this.onLoad?.(); this.onLoad = undefined; this.afterLoad(); break
-      case 'Page.navigatedWithinDocument': this.onLoad?.(); this.onLoad = undefined; break
+      case 'Fetch.requestPaused': {
+        let host = ''; try { host = new URL(params.request.url).hostname } catch {}
+        if (hostAllowed(this.config.hosts, host)) void this.cdp('Fetch.continueRequest', { requestId: params.requestId }).catch(() => {})
+        else { this.note(`blocked navigation to ${params.request.url} (not one of this project's hosts)`); void this.cdp('Fetch.failRequest', { requestId: params.requestId, errorReason: 'BlockedByClient' }).catch(() => {}) }
+        break
+      }
+      case 'Page.frameStartedLoading': if (params.frameId === this.mainFrame) this.loading = true; break
+      case 'Page.frameNavigated': if (!params.frame?.parentId) { this.mainFrame = params.frame.id; this.currentUrl = params.frame.url } break
+      case 'Page.loadEventFired': this.loading = false; this.onLoad?.(); this.onLoad = undefined; this.afterLoad(); break
+      case 'Page.navigatedWithinDocument': this.loading = false; this.onLoad?.(); this.onLoad = undefined; break
       // Nobody is there to answer a dialog, and an unanswered one cancels whatever caused it (a navigation, say).
       case 'Page.javascriptDialogOpening': void this.cdp('Page.handleJavaScriptDialog', { accept: true }).catch(() => {}); if (params.type !== 'beforeunload') this.note(`${params.type}: ${String(params.message).slice(0, 300)} (accepted)`); break
       case 'Runtime.consoleAPICalled': if (params.type === 'warning' || params.type === 'error') this.note(`console.${params.type === 'warning' ? 'warn' : 'error'}: ${(params.args ?? []).map((a: any) => a.value ?? a.description ?? '').join(' ').slice(0, 500)}`); break
@@ -108,13 +146,27 @@ export class Page {
     this.popupIds.delete(info.targetId)
     this.popups.push(info.url)
     void this.chrome.send('Target.closeTarget', { targetId: info.targetId }).catch(() => {})
-    void this.load(info.url)
+    let host = ''; try { host = new URL(info.url).hostname } catch {}
+    if (hostAllowed(this.config.hosts, host)) void this.load(info.url); else this.note(`a link wanted to open ${info.url} in a new tab (not one of this project's hosts, so not followed)`)
   }
   private afterLoad() {
     if (this.rec?.caption) this.fire(CAPTION_JS(this.rec.caption)) // a caption outlives a navigation
     if (this.at) this.fire(CURSOR_JS(this.at.x, this.at.y)) // so does the pointer
+    if (this.config.onLoad) this.fire(this.config.onLoad) // the project's own after-load script: a dev login, say
   }
+  /** Tell whoever is watching what just happened, in words — 'clicked "Save changes"' — not the command as typed. */
+  did(text: string) { for (const w of this.watchers) w.did?.(text) }
+  /** Frames flow while recording or while someone watches; the screencast is one stream shared by both. */
+  async wantFrames() { if (this.screencast) return; this.screencast = true; await this.cdp('Page.startScreencast', { format: 'jpeg', quality: 82, maxWidth: 2880, maxHeight: 1800, everyNthFrame: 1 }) }
+  async doneWithFrames() { if (!this.screencast || this.rec || this.watchers.size) return; this.screencast = false; await this.cdp('Page.stopScreencast').catch(() => {}) }
 
+  /** If something set a navigation going, wait for the new page (a form's redirect, a followed link) before reading it. */
+  async settle(ms = 10_000) {
+    if (!this.loading) return
+    const loaded = new Promise<void>((r) => { this.onLoad = r })
+    await Promise.race([loaded, sleep(ms)])
+    await sleep(300)
+  }
   async setSize(w: number, h: number) { this.size = [w, h]; await this.cdp('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: SCALE, mobile: false }) }
   url() { return this.evaluate<string>('location.href') }
   async where() { return this.evaluate<string>(`location.href + (document.title ? ' — ' + document.title : '')`) }
@@ -127,14 +179,17 @@ export class Page {
     if (r.errorText && r.errorText !== 'net::ERR_ABORTED') { this.failed = r.errorText; this.onLoad = undefined; return }
     await Promise.race([loaded, sleep(20_000)])
     await sleep(400)
+    if (this.config.onLoad) for (let i = 0; i < 20 && (await this.evaluate<boolean>('!!document.querySelector("input[type=password]")').catch(() => false)); i++) await sleep(300) // the after-load script may be logging in
+    if (/^https?:/.test(url)) { this.base = new URL(url).origin; if (this.stateFile) { try { fs.mkdirSync(path.dirname(this.stateFile), { recursive: true }); fs.writeFileSync(this.stateFile, JSON.stringify({ base: this.base })) } catch {} } }
   }
 
   /** Where a target is: an element (a ref, text=Label, a selector), scrolled into view, or x,y in page pixels (a canvas). */
-  async spot(target: string): Promise<Spot> {
+  async spot(target: string, scroll = true): Promise<Spot> {
     const xy = /^(\d+),(\d+)$/.exec(target.trim())
     if (xy) return { x: +xy[1], y: +xy[2], name: `${xy[1]},${xy[2]}` }
-    const at = await this.evaluate<Spot & { error?: string }>(locateJs(target))
+    const at = await this.evaluate<Spot & { error?: string }>(locateJs(target, scroll))
     if (at.error) throw new Error(at.error)
+    if (!scroll) return at
     await sleep(120) // let the scroll-into-view land before aiming at it
     const again = await this.evaluate<Spot & { error?: string }>(locateJs(target))
     return again.error ? at : { ...again, name: at.name }
@@ -154,7 +209,7 @@ export class Page {
     const at = await this.spot(target)
     await this.moveMouse(at.x, at.y)
     if (this.rec) { // the ring and the word, as the click lands
-      const color = button === 'right' ? AMBER : GREEN
+      const color = button === 'right' ? BLUE : ORANGE
       this.fire(CLICK_JS(at.x, at.y, color))
       this.hud(`mouse(${at.x}, ${at.y}, ${JSON.stringify(button)}, ${JSON.stringify(color)}, ${times})`)
     }
@@ -177,9 +232,11 @@ export class Page {
   }
   /** Press at one spot, carry to the other in steps the page (and the viewer) can follow, let go. */
   async drag(from: string, to: string): Promise<string> {
-    const a = await this.spot(from), b = await this.spot(to)
+    await this.spot(to) // so both are known to exist…
+    const a = await this.spot(from) // …then the page is left where `from` is on screen
+    const b = await this.spot(to, false) // and `to` is found where it is now, without scrolling `from` away
     await this.moveMouse(a.x, a.y)
-    this.hud(`hold(${a.x}, ${a.y}, '${GREEN}')`)
+    this.hud(`hold(${a.x}, ${a.y}, '${ORANGE}')`)
     await this.press(a.x, a.y, 'mousePressed')
     const steps = 8
     for (let i = 1; i <= steps; i++) { const x = a.x + ((b.x - a.x) * i) / steps, y = a.y + ((b.y - a.y) * i) / steps; await this.moveMouse(x, y, { buttons: 1, settle: this.rec ? 90 : 60 }); this.hud(`move(${x}, ${y})`) }
@@ -190,7 +247,7 @@ export class Page {
     return `${a.name} → ${b.name}`
   }
   /** The element the last locate found, as a remote object — for CDP calls that take a node (file inputs). */
-  async lastObject() { return (await this.cdp<{ result: { objectId?: string } }>('Runtime.evaluate', { expression: 'window.__glade && window.__glade.last' })).result.objectId }
+  async lastObject() { return (await this.cdp<{ result: { objectId?: string } }>('Runtime.evaluate', { expression: 'window.__lantern && window.__lantern.last' })).result.objectId }
   private async locate(target: string) {
     const at = await this.evaluate<{ rect?: Rect; name?: string; error?: string }>(locateJs(target))
     if (at.error || !at.rect) throw new Error(at.error ?? 'could not find that')
@@ -203,12 +260,13 @@ export class Page {
     switch (sub) {
       case 'open': {
         const cur = await this.url()
-        const base = /^https?:/.test(cur) ? cur : process.env.GLADE_URL
+        const base = /^https?:/.test(cur) ? cur : this.base
         let url: string
-        try { url = new URL(rest[0] ?? '/', base).toString() } catch { return { ok: false, text: `open what? Give a full URL the first time — \`glade open http://localhost:3000\` — then paths like /settings resolve against it` } }
+        try { url = new URL(rest[0] ?? '/', base).toString() } catch { return { ok: false, text: `open what? Give a full URL the first time — \`lantern open http://localhost:3000\` — then paths like /settings resolve against it` } }
+        if (!hostAllowed(this.config.hosts, new URL(url).hostname)) return { ok: false, text: `this browser only visits this project's app (${this.config.hosts!.join(', ')}), not ${new URL(url).host}` }
         await this.load(url)
         if (this.failed) return { ok: false, text: `${url} did not load (${this.failed}). Is the app running there?` }
-        return { ok: true, text: `at ${await this.where()}\nrun \`glade snapshot\` to see what's on it` }
+        return { ok: true, text: `at ${await this.where()}\nrun \`lantern snapshot\` to see what's on it` }
       }
       case 'url': return { ok: true, text: await this.where() }
       case 'back': {
@@ -220,7 +278,7 @@ export class Page {
       case 'reload': await this.load(await this.url()); return { ok: true, text: `reloaded ${await this.where()}` }
       case 'snapshot': {
         const s = await this.evaluate<{ url: string; title: string; lines: string[]; more: number }>(SNAPSHOT_JS)
-        return { ok: true, text: [`${s.url}${s.title ? ` — ${s.title}` : ''}`, ...(s.lines.length ? s.lines : ['(nothing to act on — the page may still be loading; try `glade wait 1000`, or `glade text`)']), ...(s.more ? [`… and ${s.more} more controls not listed`] : [])].join('\n') }
+        return { ok: true, text: [`${s.url}${s.title ? ` — ${s.title}` : ''}`, ...(s.lines.length ? s.lines : ['(nothing to act on — the page may still be loading; try `lantern wait 1000`, or `lantern text`)']), ...(s.more ? [`… and ${s.more} more controls not listed`] : [])].join('\n') }
       }
       case 'text': {
         const t = await this.evaluate<string | null>(`(() => { const el = ${rest[0] ? `document.querySelector(${JSON.stringify(rest[0])})` : 'document.body'}; return el ? el.innerText : null })()`)
@@ -233,13 +291,13 @@ export class Page {
         const before = await this.url()
         this.popups.length = 0
         const name = await this.click(rest.join(' '))
-        await sleep(500)
+        await sleep(500); await this.settle()
         const tabs = this.popups.map((u) => `\nit asked to open a new tab: ${u} (opened here instead)`).join('')
         const now = await this.url()
         return { ok: true, text: `clicked "${name}"${now !== before ? ` → now at ${await this.where()}` : ''}${tabs}` }
       }
       case 'fill': {
-        if (rest.length < 2) return { ok: false, text: 'usage: glade fill <target> <text>' }
+        if (rest.length < 2) return { ok: false, text: 'usage: lantern fill <target> <text>' }
         const name = await this.click(rest[0])
         if (!(await this.evaluate<boolean>(FOCUS_JS))) return { ok: false, text: `"${name}" did not take focus — is it a field?` }
         await this.evaluate(`(() => { const el = document.activeElement; if (el && el.select) el.select(); else if (el && el.isContentEditable) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r) } })()`)
@@ -258,7 +316,7 @@ export class Page {
         await this.cdp('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', key: def.key, code: def.code, windowsVirtualKeyCode: def.vk, nativeVirtualKeyCode: def.vk, text, modifiers, commands: modifiers & 4 && k.length === 1 ? [{ a: 'selectAll', c: 'copy', v: 'paste', x: 'cut', z: 'undo' }[k.toLowerCase() as 'a']].filter(Boolean) : undefined })
         await this.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: def.key, code: def.code, windowsVirtualKeyCode: def.vk, nativeVirtualKeyCode: def.vk, modifiers })
         this.hud(`key(${JSON.stringify([...parts.map((x) => KEY_GLYPH[x.toLowerCase()] ?? x), KEY_GLYPH[k] ?? k])})`)
-        await sleep(this.rec ? 700 : 300)
+        await sleep(this.rec ? 700 : 300); await this.settle()
         return { ok: true, text: `pressed ${rest[0]}` }
       }
       case 'rightclick': {
@@ -283,7 +341,7 @@ export class Page {
           const x = r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), y = Math.min(h - 12, r.y + r.height + 36)
           await this.moveMouse(x, y, { settle: 300 })
         }
-        return { ok: true, text: `highlighting "${name}" — it glows in screenshots and the recording, follows the element and goes when it does; \`glade highlight off\` ends it` }
+        return { ok: true, text: `highlighting "${name}" — it glows in screenshots and the recording, follows the element and goes when it does; \`lantern highlight off\` ends it` }
       }
       case 'hover': {
         if (!rest[0]) return { ok: false, text: 'hover what? a ref, text=Label, a selector, or x,y' }
@@ -292,7 +350,7 @@ export class Page {
         return { ok: true, text: `hovering over "${at.name}" — snapshot to see what that revealed` }
       }
       case 'drag': {
-        if (rest.length < 2) return { ok: false, text: 'usage: glade drag <from> <to> — each a ref, text=Label, a selector, or x,y' }
+        if (rest.length < 2) return { ok: false, text: 'usage: lantern drag <from> <to> — each a ref, text=Label, a selector, or x,y' }
         const name = await this.drag(rest[0], rest.slice(1).join(' ')); await sleep(300)
         return { ok: true, text: `dragged ${name}` }
       }
@@ -300,7 +358,7 @@ export class Page {
         const dir = rest[0]
         if (dir === 'to' && rest[1]) { const at = await this.spot(rest.slice(1).join(' ')); await this.moveMouse(at.x, at.y, { settle: 150 }); return { ok: true, text: `scrolled "${at.name}" into view` } }
         const d = { down: [0, 1], up: [0, -1], right: [1, 0], left: [-1, 0] }[dir ?? '']
-        if (!d) return { ok: false, text: 'usage: glade scroll <down|up|left|right> [px] [at <target>], or scroll to <target>' }
+        if (!d) return { ok: false, text: 'usage: lantern scroll <down|up|left|right> [px] [at <target>], or scroll to <target>' }
         const px = /^\d+$/.test(rest[1] ?? '') ? Number(rest[1]) : 500
         const atIdx = rest.indexOf('at')
         const [cw, ch] = this.size
@@ -324,18 +382,18 @@ export class Page {
         return { ok: true, text: `typed ${rest.join(' ').length} characters into what has focus` }
       }
       case 'select': {
-        if (rest.length < 2) return { ok: false, text: 'usage: glade select <target> <option text or value>' }
+        if (rest.length < 2) return { ok: false, text: 'usage: lantern select <target> <option text or value>' }
         const at = await this.spot(rest[0])
         await this.moveMouse(at.x, at.y, { settle: 150 })
         const want = rest.slice(1).join(' ')
-        const r = await this.evaluate<{ ok?: boolean; chosen?: string; error?: string; options?: string[] }>(`(() => { const el = window.__glade && window.__glade.last; if (!el || el.tagName !== 'SELECT') return { error: 'not a <select>' }; const want = ${JSON.stringify(want)}; const o = [...el.options].find((o) => o.text.trim() === want || o.value === want) || [...el.options].find((o) => o.text.trim().toLowerCase().includes(want.toLowerCase())); if (!o) return { error: 'no such option', options: [...el.options].map((o) => o.text.trim()) }; el.value = o.value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return { ok: true, chosen: o.text.trim() } })()`)
+        const r = await this.evaluate<{ ok?: boolean; chosen?: string; error?: string; options?: string[] }>(`(() => { const el = window.__lantern && window.__lantern.last; if (!el || el.tagName !== 'SELECT') return { error: 'not a <select>' }; const want = ${JSON.stringify(want)}; const o = [...el.options].find((o) => o.text.trim() === want || o.value === want) || [...el.options].find((o) => o.text.trim().toLowerCase().includes(want.toLowerCase())); if (!o) return { error: 'no such option', options: [...el.options].map((o) => o.text.trim()) }; el.value = o.value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return { ok: true, chosen: o.text.trim() } })()`)
         if (r.error) return { ok: false, text: r.options ? `${r.error} — the options are: ${r.options.join(' · ')}` : `"${at.name}" is ${r.error}; for a custom dropdown, click it and then click the option` }
         return { ok: true, text: `chose "${r.chosen}" in "${at.name}"` }
       }
       case 'check': case 'uncheck': {
         if (!rest[0]) return { ok: false, text: `${sub} what? a ref, text=Label, or a selector` }
         const at = await this.spot(rest.join(' '))
-        const state = await this.evaluate<{ checked?: boolean; error?: string }>(`(() => { const el = window.__glade && window.__glade.last; if (!el) return { error: 'gone' }; const box = el.matches('input[type=checkbox],input[type=radio],[role=checkbox],[role=switch]') ? el : el.querySelector('input[type=checkbox],input[type=radio]'); if (!box) return { error: 'not a checkbox' }; return { checked: 'checked' in box ? box.checked : box.getAttribute('aria-checked') === 'true' } })()`)
+        const state = await this.evaluate<{ checked?: boolean; error?: string }>(`(() => { const el = window.__lantern && window.__lantern.last; if (!el) return { error: 'gone' }; const box = el.matches('input[type=checkbox],input[type=radio],[role=checkbox],[role=switch]') ? el : el.querySelector('input[type=checkbox],input[type=radio]'); if (!box) return { error: 'not a checkbox' }; return { checked: 'checked' in box ? box.checked : box.getAttribute('aria-checked') === 'true' } })()`)
         if (state.error) return { ok: false, text: `"${at.name}" is ${state.error}` }
         const want = sub === 'check'
         if (state.checked === want) return { ok: true, text: `"${at.name}" was already ${want ? 'checked' : 'unchecked'}` }
@@ -343,12 +401,12 @@ export class Page {
         return { ok: true, text: `${want ? 'checked' : 'unchecked'} "${at.name}"` }
       }
       case 'upload': {
-        if (rest.length < 2) return { ok: false, text: 'usage: glade upload <target> <file…> — a file input, or the button that opens one' }
+        if (rest.length < 2) return { ok: false, text: 'usage: lantern upload <target> <file…> — a file input, or the button that opens one' }
         const files = rest.slice(1).map((f) => path.resolve(cwd, f))
         for (const f of files) if (!fs.existsSync(f)) return { ok: false, text: `no such file: ${f}` }
         const at = await this.spot(rest[0])
         await this.moveMouse(at.x, at.y, { settle: 150 })
-        const found = await this.evaluate<boolean>(`(() => { const el = window.__glade && window.__glade.last; if (!el) return false; const input = el.matches('input[type=file]') ? el : el.querySelector('input[type=file]') || (el.closest('label') && el.closest('label').querySelector('input[type=file]')) || (el.parentElement && el.parentElement.querySelector('input[type=file]')) || document.querySelector('input[type=file]'); if (!input) return false; window.__glade.last = input; return true })()`)
+        const found = await this.evaluate<boolean>(`(() => { const el = window.__lantern && window.__lantern.last; if (!el) return false; const input = el.matches('input[type=file]') ? el : el.querySelector('input[type=file]') || (el.closest('label') && el.closest('label').querySelector('input[type=file]')) || (el.parentElement && el.parentElement.querySelector('input[type=file]')) || document.querySelector('input[type=file]'); if (!input) return false; window.__lantern.last = input; return true })()`)
         if (!found) return { ok: false, text: `no file input at or near "${at.name}"` }
         const objectId = await this.lastObject()
         if (!objectId) return { ok: false, text: 'could not reach the file input' }
@@ -357,19 +415,19 @@ export class Page {
       }
       case 'get': {
         const what = rest[0], target = rest.slice(what === 'attr' ? 2 : 1).join(' ')
-        if (!what || !target) return { ok: false, text: 'usage: glade get text|value|attr <name>|count|box <target>' }
+        if (!what || !target) return { ok: false, text: 'usage: lantern get text|value|attr <name>|count|box <target>' }
         if (what === 'count') { const n = await this.evaluate<number | null>(`(() => { try { return document.querySelectorAll(${JSON.stringify(target)}).length } catch { return null } })()`); return n === null ? { ok: false, text: `${target} is not a selector` } : { ok: true, text: String(n) } }
         const at = await this.spot(target)
         if (what === 'box') return { ok: true, text: at.rect ? `${Math.round(at.rect.x)},${Math.round(at.rect.y)} ${Math.round(at.rect.width)}×${Math.round(at.rect.height)}` : `${at.x},${at.y}` }
-        const v = await this.evaluate<string | null>(`(() => { const el = window.__glade && window.__glade.last; if (!el) return null; ${what === 'text' ? 'return el.innerText' : what === 'value' ? "return 'value' in el ? String(el.value) : null" : what === 'attr' ? `return el.getAttribute(${JSON.stringify(rest[1] ?? '')})` : 'return null'} })()`)
+        const v = await this.evaluate<string | null>(`(() => { const el = window.__lantern && window.__lantern.last; if (!el) return null; ${what === 'text' ? 'return el.innerText' : what === 'value' ? "return 'value' in el ? String(el.value) : null" : what === 'attr' ? `return el.getAttribute(${JSON.stringify(rest[1] ?? '')})` : 'return null'} })()`)
         return v === null ? { ok: false, text: `"${at.name}" has no ${what}${what === 'attr' ? ` ${rest[1]}` : ''}` } : { ok: true, text: v }
       }
       case 'is': {
         const what = rest[0], target = rest.slice(1).join(' ')
-        if (!['visible', 'enabled', 'checked'].includes(what ?? '') || !target) return { ok: false, text: 'usage: glade is visible|enabled|checked <target>' }
+        if (!['visible', 'enabled', 'checked'].includes(what ?? '') || !target) return { ok: false, text: 'usage: lantern is visible|enabled|checked <target>' }
         let at: Spot
         try { at = await this.spot(target) } catch (e) { return what === 'visible' ? { ok: true, text: 'no' } : { ok: false, text: String((e as Error).message) } }
-        const v = await this.evaluate<boolean>(`(() => { const el = window.__glade && window.__glade.last; if (!el) return false; ${what === 'visible' ? "const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'" : what === 'enabled' ? "return !el.disabled && el.getAttribute('aria-disabled') !== 'true'" : "return 'checked' in el ? !!el.checked : el.getAttribute('aria-checked') === 'true'"} })()`)
+        const v = await this.evaluate<boolean>(`(() => { const el = window.__lantern && window.__lantern.last; if (!el) return false; ${what === 'visible' ? "const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'" : what === 'enabled' ? "return !el.disabled && el.getAttribute('aria-disabled') !== 'true'" : "return 'checked' in el ? !!el.checked : el.getAttribute('aria-checked') === 'true'"} })()`)
         return { ok: true, text: `${v ? 'yes' : 'no'} — "${at.name}" is ${v ? '' : 'not '}${what}` }
       }
       case 'wait': {
@@ -379,7 +437,7 @@ export class Page {
         return { ok: false, text: `"${a}" did not appear within 10s` }
       }
       case 'eval': {
-        if (!rest.length) return { ok: false, text: 'usage: glade eval <javascript>' }
+        if (!rest.length) return { ok: false, text: 'usage: lantern eval <javascript>' }
         const v = await this.evaluate(rest.join(' '))
         const out = typeof v === 'string' ? v : JSON.stringify(v, null, 2)
         return { ok: true, text: (out ?? 'undefined').slice(0, 8000) }
@@ -390,7 +448,7 @@ export class Page {
         const m = /^(\d{3,4})[x×](\d{3,4})$/.exec(a)
         const sz = PRESETS[a] ?? (m ? [Number(m[1]), Number(m[2])] as [number, number] : null)
         if (!sz) return { ok: false, text: `size what? a preset (${Object.keys(PRESETS).join(', ')}), or WxH like 1440x900` }
-        if (this.rec) return { ok: false, text: 'the size is fixed while recording — set it before `glade record start`' }
+        if (this.rec) return { ok: false, text: 'the size is fixed while recording — set it before `lantern record start`' }
         this.fixed = true; await this.setSize(sz[0], sz[1]); await sleep(400)
         return { ok: true, text: `${sz[0]}×${sz[1]}` }
       }
@@ -401,15 +459,15 @@ export class Page {
         if (rest[0] === '--clear') this.log.length = 0
         return { ok: true, text: out }
       }
-      default: return { ok: false, text: `unknown: glade ${sub}\n\n${USAGE}` }
+      default: return { ok: false, text: `unknown: lantern ${sub}\n\n${USAGE}` }
     }
   }
 
   private async record(rest: string[]): Promise<Reply> {
     const what = rest[0]
     if (what === 'start') {
-      if (this.rec) return { ok: false, text: `already recording (${this.rec.frames.length} frames so far) — \`glade record stop\` first` }
-      if (!(await hasFfmpeg())) return { ok: false, text: 'recording needs ffmpeg, which is not installed: brew install ffmpeg (or apt install ffmpeg), or set GLADE_FFMPEG' }
+      if (this.rec) return { ok: false, text: `already recording (${this.rec.frames.length} frames so far) — \`lantern record stop\` first` }
+      if (!(await hasFfmpeg())) return { ok: false, text: 'recording needs ffmpeg, which is not installed: brew install ffmpeg (or apt install ffmpeg), or set LANTERN_FFMPEG' }
       const dir = path.join(this.outDir, `rec-${stamp()}`); fs.mkdirSync(dir, { recursive: true })
       const [rw, rh] = this.fixed ? this.size : [REC_W, REC_H]
       await this.setSize(rw, rh)
@@ -418,11 +476,11 @@ export class Page {
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
-      await this.cdp('Page.startScreencast', { format: 'jpeg', quality: 82, maxWidth: rw * SCALE, maxHeight: rh * SCALE, everyNthFrame: 1 })
-      return { ok: true, text: `recording at ${rw}×${rh} — do the steps, set captions with \`glade record caption <text>\`, then \`glade record stop\`` }
+      await this.wantFrames()
+      return { ok: true, text: `recording at ${rw}×${rh} — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
     }
     if (what === 'caption') {
-      if (!this.rec) return { ok: false, text: 'not recording — `glade record start` first' }
+      if (!this.rec) return { ok: false, text: 'not recording — `lantern record start` first' }
       const text = rest.slice(1).join(' ')
       this.rec.caption = text === 'off' ? undefined : text
       this.rec.marks.push(Date.now())
@@ -434,9 +492,10 @@ export class Page {
       this.rec = undefined
       this.hl = false
       await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false)).catch(() => {})
-      await this.cdp('Page.stopScreencast').catch(() => {})
+      await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
-      if (r.frames.length < 2) { fs.rmSync(r.dir, { recursive: true, force: true }); return { ok: false, text: 'nothing was recorded: the page never changed while recording' } }
+      const same = r.frames.length <= 3 && r.frames.slice(1).every((f) => { try { return fs.readFileSync(f.file).equals(fs.readFileSync(r.frames[0].file)) } catch { return false } })
+      if (r.frames.length < 2 || same) { fs.rmSync(r.dir, { recursive: true, force: true }); return { ok: false, text: 'nothing was recorded: the page never changed while recording' } }
       // Each frame shows until the next; a long gap (the agent thinking) is cut to a beat, so the clip is the interactions, not the waiting.
       const GAP = 1.2, MIN = 0.08, HOLD = 2.5
       const durs = r.frames.map((f, i) => { const next = r.frames[i + 1]; return next ? Math.max(MIN, Math.min(GAP, (next.t - f.t) / 1000)) : 1.5 })
@@ -458,7 +517,7 @@ export class Page {
       const secs = durs.reduce((n, d) => n + d, 0)
       return { ok: true, text: `${out}\n(${Math.round(secs)}s, ${r.frames.length} frames)` }
     }
-    return { ok: false, text: 'usage: glade record start | caption <text> | stop' }
+    return { ok: false, text: 'usage: lantern record start | caption <text> | stop' }
   }
 
   private async screenshot(rest: string[]): Promise<Reply> {

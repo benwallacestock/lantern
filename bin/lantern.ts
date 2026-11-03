@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// glade — a browser for coding agents: open the app, click around, take screenshots that are ready for a pull
+// lantern — a browser for coding agents: open the app, click around, take screenshots that are ready for a pull
 // request, record a demo. Each command is a short-lived process; the page lives in a daemon (src/daemon.ts)
 // that the first command starts, so the page survives between commands however long the agent thinks.
 import { execFileSync, spawn } from 'node:child_process'
@@ -24,11 +24,11 @@ const git = (...a: string[]) => { try { return execFileSync('git', a, { cwd, std
 const root = git('rev-parse', '--show-toplevel') || cwd
 const P = paths(root)
 
-// Pictures go in <root>/tmp/glade. In a git repo that folder is kept out of git for you (in .git/info/exclude, so
+// Pictures go in <root>/tmp/lantern. In a git repo that folder is kept out of git for you (in .git/info/exclude, so
 // the repo's own .gitignore is left alone).
 if (root !== cwd || git('rev-parse', '--is-inside-work-tree') === 'true') {
-  const ignored = (() => { try { execFileSync('git', ['check-ignore', '-q', 'tmp/glade'], { cwd: root, stdio: 'ignore' }); return true } catch { return false } })()
-  if (!ignored) { const ex = git('rev-parse', '--git-path', 'info/exclude'); if (ex) { try { fs.mkdirSync(path.dirname(path.resolve(root, ex)), { recursive: true }); fs.appendFileSync(path.resolve(root, ex), '\ntmp/glade/\n') } catch {} } }
+  const ignored = (() => { try { execFileSync('git', ['check-ignore', '-q', 'tmp/lantern'], { cwd: root, stdio: 'ignore' }); return true } catch { return false } })()
+  if (!ignored) { const ex = git('rev-parse', '--git-path', 'info/exclude'); if (ex) { try { fs.mkdirSync(path.dirname(path.resolve(root, ex)), { recursive: true }); fs.appendFileSync(path.resolve(root, ex), '\ntmp/lantern/\n') } catch {} } }
 }
 
 function connect(req: object): Promise<Reply | null> {
@@ -37,12 +37,12 @@ function connect(req: object): Promise<Reply | null> {
     let buf = ''
     c.on('connect', () => c.write(JSON.stringify(req) + '\n'))
     c.on('data', (d) => (buf += d))
-    c.on('end', () => { try { res(JSON.parse(buf)) } catch { res({ ok: false, text: 'glade gave no answer' }) } })
+    c.on('end', () => { try { res(JSON.parse(buf)) } catch { res({ ok: false, text: 'lantern gave no answer' }) } })
     c.on('error', (e: NodeJS.ErrnoException) => {
       if (e.code === 'ECONNREFUSED') { try { fs.rmSync(P.sock, { force: true }) } catch {} } // a socket file left by a daemon that died
-      res(e.code === 'ENOENT' || e.code === 'ECONNREFUSED' ? null : { ok: false, text: `could not reach glade: ${e.message}` })
+      res(e.code === 'ENOENT' || e.code === 'ECONNREFUSED' ? null : { ok: false, text: `could not reach lantern: ${e.message}` })
     })
-    setTimeout(() => res({ ok: false, text: 'glade did not answer within 2 minutes' }), 120_000)
+    setTimeout(() => res({ ok: false, text: 'lantern did not answer within 2 minutes' }), 120_000)
   })
 }
 
@@ -66,20 +66,28 @@ async function ask(req: object): Promise<Reply> {
     await sleep(250)
     const r = await connect(req)
     if (r) return r
-    if (gone) { let tail = ''; try { tail = fs.readFileSync(P.log, 'utf8').trim().split('\n').slice(-8).join('\n') } catch {}; die(`glade could not start. Its log (${P.log}) ends:\n${tail}`) }
+    if (gone) { let tail = ''; try { tail = fs.readFileSync(P.log, 'utf8').trim().split('\n').slice(-8).join('\n') } catch {}; die(`lantern could not start. Its log (${P.log}) ends:\n${tail}`) }
   }
-  return die(`glade did not start within 30s — see ${P.log}`)
+  return die(`lantern did not start within 30s — see ${P.log}`)
 }
 
 async function main() {
   let req: object
+  if (cmd === 'watch') {
+    // A live view of the page in your own browser, for a person who wants to see what the agent is doing.
+    const r = await ask({ cmd: 'preview' })
+    if (!r.ok) die(r.text)
+    console.log(`${r.text}\nwatching ${root} — the page lantern is driving, live. Open it in a browser; it closes when lantern does.`)
+    if (!rest.includes('--no-open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
+    return
+  }
   if (cmd === 'status' || cmd === 'close') {
-    if (!fs.existsSync(P.sock)) { console.log(cmd === 'status' ? `glade is not running for ${root}` : 'glade was not running'); return }
+    if (!fs.existsSync(P.sock)) { console.log(cmd === 'status' ? `lantern is not running for ${root}` : 'lantern was not running'); return }
     req = { cmd }
   } else if (cmd === 'frame') {
-    const images: string[] = []; let title: string | undefined, captions: string[] | undefined, out: string | undefined, layout: 'side' | 'stack' | undefined, scale: number | undefined
+    const images: string[] = []; let title: string | undefined, captions: string[] | undefined, out: string | undefined, layout: 'side' | 'stack' | undefined, scale: number | undefined, note: string | undefined
     // --flag value and --flag=value both work (agents reach for either).
-    const flat = rest.flatMap((a) => (/^--(title|captions|out|scale)=/.test(a) ? [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)] : [a]))
+    const flat = rest.flatMap((a) => (/^--(title|captions|out|scale|note)=/.test(a) ? [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)] : [a]))
     for (let i = 0; i < flat.length; i++) {
       const a = flat[i]
       if (a === '--title') title = flat[++i]
@@ -87,10 +95,11 @@ async function main() {
       else if (a === '--out') out = flat[++i]
       else if (a === '--side' || a === '--stack') layout = a.slice(2) as 'side' | 'stack'
       else if (a === '--scale') scale = Number(flat[++i]) || undefined
+      else if (a === '--note') note = flat[++i]
       else images.push(path.resolve(cwd, a))
     }
-    if (!images.length) die('glade frame: give a screenshot to frame (from `glade screenshot`), or two for a before/after')
-    req = { cmd: 'frame', images, title, captions, out, layout, scale, branch: git('rev-parse', '--abbrev-ref', 'HEAD') || undefined, cwd }
+    if (!images.length) die('lantern frame: give a screenshot to frame (from `lantern screenshot`), or two for a before/after')
+    req = { cmd: 'frame', images, title, captions, out, layout, scale, note, branch: git('rev-parse', '--abbrev-ref', 'HEAD') || undefined, cwd }
   } else {
     req = { cmd: 'browser', args: argv, cwd }
   }

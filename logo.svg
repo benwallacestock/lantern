@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="58%" r="50%">
+      <stop offset="0" stop-color="#ff9a4d" stop-opacity=".95"/>
+      <stop offset=".45" stop-color="#ff7a2f" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ff7a2f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb37a" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ff7a2f" stop-opacity=".85"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1c2"/>
+      <stop offset=".6" stop-color="#ffb347"/>
+      <stop offset="1" stop-color="#ff7a2f"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#16161a"/>
+  <circle cx="128" cy="146" r="92" fill="url(#glow)"/>
+  <!-- handle -->
+  <path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="8" stroke-linecap="round"/>
+  <!-- cap -->
+  <path d="M90 76 L166 76 L158 60 L98 60 Z" fill="#e8e8ee"/>
+  <rect x="84" y="74" width="88" height="12" rx="5" fill="#e8e8ee"/>
+  <!-- body -->
+  <rect x="92" y="86" width="72" height="92" rx="12" fill="url(#glass)" stroke="#e8e8ee" stroke-width="8"/>
+  <path d="M128 90 V174" stroke="#e8e8ee" stroke-width="5" stroke-opacity=".55"/>
+  <!-- flame -->
+  <path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="url(#flame)"/>
+  <path d="M128 134 C134 141, 137 146, 137 151 C137 157, 133 160, 128 160 C123 160, 119 157, 119 151 C119 146, 122 141, 128 134 Z" fill="#fff6dd" fill-opacity=".9"/>
+  <!-- base -->
+  <rect x="84" y="178" width="88" height="14" rx="6" fill="#e8e8ee"/>
+  <rect x="100" y="192" width="56" height="10" rx="4" fill="#c9c9d2"/>
+</svg>

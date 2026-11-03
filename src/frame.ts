@@ -1,4 +1,4 @@
-// `glade frame`: a screenshot, or a before/after pair, framed for a pull request — padding, rounded corners, a
+// `lantern frame`: a screenshot, or a before/after pair, framed for a pull request — padding, rounded corners, a
 // shadow, Before/After headers, a title, and a footer saying which branch and moment it came from. Chromium is
 // the renderer: the layout is a small HTML page rendered in a page of its own and captured, so it needs no image
 // library and looks like a product, not a test artifact.
@@ -7,7 +7,7 @@ import path from 'node:path'
 import type { Chrome } from './cdp.ts'
 import type { Reply } from './page.ts'
 
-export type FrameReq = { images: string[]; title?: string; captions?: string[]; out?: string; scale?: number; layout?: 'side' | 'stack'; branch?: string; cwd: string }
+export type FrameReq = { images: string[]; title?: string; captions?: string[]; out?: string; scale?: number; layout?: 'side' | 'stack'; branch?: string; note?: string; cwd: string }
 /** A PNG's size from its header, to decide how to lay the pictures out. */
 const pngSize = (p: string) => { const b = Buffer.alloc(24); const fd = fs.openSync(p, 'r'); fs.readSync(fd, b, 0, 24, 0); fs.closeSync(fd); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) } }
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
@@ -34,17 +34,20 @@ function html(req: FrameReq, foot: string): string {
   return `<!doctype html><meta charset="utf-8"><style>
     :root { --u: ${u.toFixed(3)}; }
     html, body { margin: 0; background: transparent; overflow: hidden; }
-    body { display: inline-block; font-family: -apple-system, system-ui, sans-serif; color: #15191c; }
-    .frame { display: inline-flex; flex-direction: column; gap: calc(14px * var(--u)); padding: calc(28px * var(--u)) calc(32px * var(--u)) calc(22px * var(--u)); background: linear-gradient(160deg, #eef2ef, #dfe6e2); border-radius: calc(18px * var(--u)); }
+    body { display: inline-block; font-family: -apple-system, system-ui, sans-serif; color: #f2f2f4; }
+    .frame { display: inline-flex; flex-direction: column; gap: calc(14px * var(--u)); padding: calc(28px * var(--u)) calc(32px * var(--u)) calc(22px * var(--u)); background: linear-gradient(160deg, #26262c, #15151a); border-radius: calc(18px * var(--u)); }
     h1 { margin: 0; font-size: calc(18px * var(--u)); font-weight: 700; letter-spacing: -0.01em; }
+    h1::before { content: ''; display: inline-block; width: calc(8px * var(--u)); height: calc(8px * var(--u)); border-radius: 50%; background: #ff7a2f; box-shadow: 0 0 calc(10px * var(--u)) rgba(255,122,47,.7); margin-right: calc(10px * var(--u)); vertical-align: middle; }
     .row { display: flex; gap: calc(22px * var(--u)); align-items: flex-start; }
     .row.stack { flex-direction: column; align-items: stretch; }
-    figure { margin: 0; background: #fff; border-radius: calc(12px * var(--u)); box-shadow: 0 10px 30px rgba(20, 40, 30, 0.18), 0 1px 2px rgba(0, 0, 0, 0.08); overflow: hidden; }
-    figcaption { padding: calc(9px * var(--u)) calc(14px * var(--u)); font-size: calc(13px * var(--u)); font-weight: 700; background: #f3f4f6; color: #15191c; border-bottom: 1px solid #e6e8eb; }
+    figure { margin: 0; background: #fff; border-radius: calc(12px * var(--u)); box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3); overflow: hidden; }
+    figcaption { padding: calc(9px * var(--u)) calc(14px * var(--u)); font-size: calc(13px * var(--u)); font-weight: 700; background: #2c2c33; color: #f2f2f4; border-bottom: 1px solid #3a3a42; }
     figcaption:empty { display: none; }
     img { display: block; }
+    .row.stack img { margin: 0 auto; } /* a small picture in a stacked pair sits in the middle, not at the left edge */
     /* width 0 + min-width 100%: the footer wraps to the pictures' width instead of widening the frame to fit itself */
-    .foot { display: flex; flex-wrap: wrap; gap: 4px calc(12px * var(--u)); align-items: center; font-size: calc(10.5px * var(--u)); color: #4b5a52; width: 0; min-width: 100%; }
+    .foot { display: flex; flex-wrap: wrap; gap: 4px calc(12px * var(--u)); align-items: center; font-size: calc(10.5px * var(--u)); color: #a0a0aa; width: 0; min-width: 100%; }
+    .foot b { color: #ff7a2f; }
     .foot .mono { font-family: ui-monospace, Menlo, monospace; }
   </style><body><div class="frame">${req.title ? `<h1>${esc(req.title)}</h1>` : ''}<div class="row${stack ? ' stack' : ''}">${panels}</div><div class="foot">${foot}</div></div></body>`
 }
@@ -53,7 +56,7 @@ export async function frame(chrome: Chrome, req: FrameReq, outDir: string): Prom
   if (!req.images?.length) return { ok: false, text: 'give one screenshot to frame, or two for a before/after' }
   for (const f of req.images) if (!fs.existsSync(f)) return { ok: false, text: `no such image: ${f}` }
   const when = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-  const foot = [req.branch ? `<span class="mono">${esc(req.branch)}</span>` : '', `<span>${esc(when)}</span>`].filter(Boolean).join('<span>·</span>')
+  const foot = [`<b>lantern</b>`, req.note ? `<span>${esc(req.note)}</span>` : '', req.branch ? `<span class="mono">${esc(req.branch)}</span>` : '', `<span>${esc(when)}</span>`].filter(Boolean).join('<span>·</span>')
   fs.mkdirSync(outDir, { recursive: true })
   const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' })
   const { sessionId } = await chrome.send<{ sessionId: string }>('Target.attachToTarget', { targetId, flatten: true })
