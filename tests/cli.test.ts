@@ -22,6 +22,9 @@ const bad = async (...args: string[]) => { const r = await lantern(...args); ass
 const pngSize = (f: string) => { const b = Buffer.alloc(24); const fd = fs.openSync(f, 'r'); fs.readSync(fd, b, 0, 24, 0); fs.closeSync(fd); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) } }
 const firstLine = (s: string) => s.split('\n')[0]
 const sh = (cmd: string, args: string[]) => new Promise<string>((res) => execFile(cmd, args, (_e, so, se) => res(so + se)))
+/** What ffprobe says about a video, or null where ffprobe isn't installed (the file's existence and size are still checked). */
+const probe = async (f: string): Promise<string | null> => { const out = await sh('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height,duration', '-show_entries', 'format=duration', '-of', 'default=nw=1', f]); return /ENOENT|not found/.test(out) ? null : out }
+const duration = (p: string) => Math.max(...[...p.matchAll(/duration=([\d.]+)/g)].map((m) => Number(m[1])))
 
 before(async () => {
   app = await start()
@@ -229,10 +232,10 @@ test('record a demo', async () => {
   await ok('scroll', 'down', '300')
   const out = await ok('record', 'stop')
   const f = firstLine(out); assert.ok(f.endsWith('.mp4') && fs.existsSync(f), out)
-  assert.match(out, /\(\d+s, \d+ frames\)/)
-  const probe = await sh('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height,duration', '-of', 'default=nw=1', f])
-  assert.match(probe, /width=1920/); assert.match(probe, /height=1200/)
-  const dur = Number(/duration=([\d.]+)/.exec(probe)?.[1]); assert.ok(dur >= 7.5, `captions hold: ${dur}s`) // three caption segments × 2.5s at least
+  assert.match(out, /\(\d+s, \d+ frames/)
+  assert.ok(fs.statSync(f).size > 20_000, 'the video has something in it')
+  const p = await probe(f)
+  if (p) { assert.match(p, /width=1920/); assert.match(p, /height=1200/); assert.ok(duration(p) >= 7.5, `captions hold: ${duration(p)}s`) } // three caption segments × 2.5s at least
   assert.ok(!fs.existsSync(path.dirname(f) + '/' + path.basename(f, '.mp4').replace('demo-', 'rec-')), 'frames folder removed')
   assert.match(await bad('record', 'stop'), /not recording/)
   assert.match(await bad('record', 'caption', 'x'), /not recording/)
@@ -251,9 +254,8 @@ test('record without ffmpeg: Chrome encodes the video', async () => {
     const f = firstLine(r.out); assert.match(f, /\.(mp4|webm)$/); assert.ok(fs.existsSync(f))
     assert.match(r.out, /encoded by Chrome/)
     assert.ok(fs.statSync(f).size > 20_000, 'the video has something in it')
-    const probe = await sh('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height,duration', '-show_entries', 'format=duration', '-of', 'default=nw=1', f])
-    assert.match(probe, /codec_name=(h264|vp9|vp8|av1)/); assert.match(probe, /width=1920/)
-    const dur = Number(/duration=([\d.]+)/.exec(probe)?.[1]); assert.ok(dur >= 4, `captions hold: ${dur}s in ${probe}`)
+    const p = await probe(f)
+    if (p) { assert.match(p, /codec_name=(h264|vp9|vp8|av1)/); assert.match(p, /width=1920/); assert.ok(duration(p) >= 4, `captions hold: ${duration(p)}s in ${p}`) }
   } finally { await lanternWith(NO, 'close'); await new Promise((r) => setTimeout(r, 300)); await ok('open', app.url + '/') }
 })
 test('nothing recorded when nothing changes', async () => {
@@ -282,11 +284,13 @@ test('watch: a live preview page streams frames and actions', async () => {
   assert.match(res.headers.get('content-type') ?? '', /multipart\/x-mixed-replace/)
   const reader = res.body!.getReader()
   let got = Buffer.alloc(0)
-  const poke = lantern('fill', '#name', 'watched')
-  while (got.length < 20_000) { const { value, done } = await reader.read(); if (done) break; got = Buffer.concat([got, Buffer.from(value)]) }
+  const whole = () => { const a = got.indexOf(Buffer.from([0xff, 0xd8, 0xff])); return a >= 0 && got.indexOf(Buffer.from([0xff, 0xd9]), a) > a } // a JPEG, start to end
+  let poke: Promise<Run> = lantern('fill', '#name', 'watched')
+  const t0 = Date.now()
+  while (!whole() && Date.now() - t0 < 30_000) { const { value, done } = await reader.read(); if (done) break; got = Buffer.concat([got, Buffer.from(value)]); if (!whole()) poke = poke.then(() => lantern('fill', '#name', 'watched ' + got.length)) }
   ac.abort(); await poke
+  assert.ok(whole(), `a whole JPEG arrived (${got.length} bytes)`)
   assert.match(got.toString('latin1'), /--frame\r\nContent-Type: image\/jpeg/)
-  assert.ok(got.includes(Buffer.from([0xff, 0xd8, 0xff])), 'a JPEG arrived')
   // The events: what the agent did, in words.
   const ac2 = new AbortController()
   const ev = await fetch(url + 'events', { signal: ac2.signal })

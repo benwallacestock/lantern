@@ -42,7 +42,7 @@ function connect(req: object): Promise<Reply | null> {
       if (e.code === 'ECONNREFUSED') { try { fs.rmSync(P.sock, { force: true }) } catch {} } // a socket file left by a daemon that died
       res(e.code === 'ENOENT' || e.code === 'ECONNREFUSED' ? null : { ok: false, text: `could not reach lantern: ${e.message}` })
     })
-    setTimeout(() => res({ ok: false, text: 'lantern did not answer within 2 minutes' }), 120_000)
+    setTimeout(() => res({ ok: false, text: 'lantern did not answer within 2 minutes' }), 120_000).unref() // never what keeps the process alive
   })
 }
 
@@ -79,7 +79,7 @@ async function main() {
     if (!r.ok) die(r.text)
     console.log(`${r.text}\nwatching ${root} — the page lantern is driving, live. Open it in a browser; it closes when lantern does.`)
     if (!rest.includes('--no-open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
-    return
+    process.exit(0)
   }
   if (cmd === 'status' || cmd === 'close') {
     if (!fs.existsSync(P.sock)) { console.log(cmd === 'status' ? `lantern is not running for ${root}` : 'lantern was not running'); return }

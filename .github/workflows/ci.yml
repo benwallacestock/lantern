@@ -18,8 +18,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      # The runner has Google Chrome and ffmpeg already; the suite also covers the no-ffmpeg path itself.
-      - run: google-chrome --version && ffmpeg -version | head -1
+      # The runner has Google Chrome; ffmpeg is installed so both assembly paths are tested (the suite covers the
+      # no-ffmpeg path itself by pointing LANTERN_FFMPEG nowhere).
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      - run: google-chrome --version && ffmpeg -version > /dev/null && ffprobe -version > /dev/null
       - run: npm test
       - if: failure()
         uses: actions/upload-artifact@v4
