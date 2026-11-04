@@ -58,8 +58,10 @@ export function notes(commits: Commit[]): string {
 
 const CHANGELOG = 'CHANGELOG.md'
 const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim()
-/** A push, tried a few times: GitHub has its moments (an outage rejected a release's tag push once). */
-const push = (...refs: string[]) => { for (let i = 1; ; i++) { try { sh('git', ['push', '-q', 'origin', ...refs]); return } catch (e) { if (i === 5) throw e; console.log(`push failed (${i}/5), trying again in 30s`); execFileSync('sleep', ['30']) } } }
+/** A push, tried again with growing waits (about twenty minutes in all): GitHub has its moments, and an outage
+ * that rejected a release's pushes for a quarter of an hour is cheaper to wait out than to leave half cut. */
+const WAITS = [30, 60, 120, 180, 240, 300, 300]
+const push = (...refs: string[]) => { for (let i = 0; ; i++) { try { sh('git', ['push', '-q', 'origin', ...refs]); return } catch (e) { if (i === WAITS.length) throw e; console.log(`push failed (${i + 1}/${WAITS.length + 1}), trying again in ${WAITS[i]}s`); execFileSync('sleep', [String(WAITS[i])]) } } }
 const die = (m: string): never => { console.error(m); process.exit(1) }
 
 /** One section of the changelog: its body and where it sits. */
