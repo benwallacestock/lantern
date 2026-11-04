@@ -58,6 +58,8 @@ export function notes(commits: Commit[]): string {
 
 const CHANGELOG = 'CHANGELOG.md'
 const sh = (cmd: string, args: string[]) => execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim()
+/** A push, tried a few times: GitHub has its moments (an outage rejected a release's tag push once). */
+const push = (...refs: string[]) => { for (let i = 1; ; i++) { try { sh('git', ['push', '-q', 'origin', ...refs]); return } catch (e) { if (i === 5) throw e; console.log(`push failed (${i}/5), trying again in 30s`); execFileSync('sleep', ['30']) } } }
 const die = (m: string): never => { console.error(m); process.exit(1) }
 
 /** One section of the changelog: its body and where it sits. */
@@ -111,7 +113,7 @@ function main() {
     if (dry) { console.log('(dry run: nothing written)'); return }
     fs.writeFileSync('notes.md', s!.body + '\n')
     sh('git', ['tag', '-a', `v${v}`, '-m', `lantern ${v}`, half.hash!])
-    sh('git', ['push', '-q', 'origin', `v${v}`])
+    push(`v${v}`)
     out('version', v)
     console.log(`tagged v${v} and pushed`); return
   }
@@ -132,8 +134,8 @@ function main() {
   sh('git', ['add', CHANGELOG, 'package.json', 'package-lock.json', '.claude-plugin/plugin.json'])
   sh('git', ['commit', '-q', '-m', `lantern ${version}`])
   sh('git', ['tag', '-a', `v${version}`, '-m', `lantern ${version}`])
-  sh('git', ['push', '-q'])
-  sh('git', ['push', '-q', 'origin', `v${version}`])
+  push('main')
+  push(`v${version}`)
   out('version', version)
   console.log(`committed, tagged v${version} and pushed`)
 }
