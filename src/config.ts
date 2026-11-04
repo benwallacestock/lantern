@@ -1,10 +1,10 @@
-// Settings for a project, from three places, the first that has a value winning:
-//   1. the environment of the command that starts the daemon (LANTERN_URL, LANTERN_ON_LOAD, …) — what a tool wrapping
-//      lantern sets for the sessions it spawns
-//   2. ~/.lantern/projects/<hash>.json — lantern's own folder, outside the repository: for this machine's settings, a
-//      dev login with a password in it, anything that must not be committed. `lantern settings` prints its path.
-//   3. .lantern.json at the project root — for a team that chooses to commit the project's URL and hosts
-//   4. ~/.lantern/settings.json — the user's defaults for every project (an accent, the footer, update: false)
+// Settings for a project. Any folder from the project up to the root of the filesystem can hold `.lantern/settings.json`;
+// the nearer the file, the stronger, merged key by key — the way Claude Code reads its .claude folders. Your own
+// ~/.lantern/settings.json is the top of that walk (and is read even for a project outside your home). The environment
+// of the command that starts the daemon (LANTERN_URL, LANTERN_ON_LOAD, …) wins over every file. So: a team commits
+// .lantern/settings.json in the repo for the app's URL and hosts; a tool that keeps many checkouts under one folder
+// puts what they share (a dev login) in that folder's .lantern/settings.json and never touches a checkout; a person
+// customises one run with LANTERN_*. The keys:
 //
 //   url     where relative paths go the first time: "http://localhost:3000"
 //   hosts   the only hosts the page may visit (comma-separated, or an array): "app.localhost,api.app.localhost"
@@ -13,9 +13,9 @@
 //   onLoad  JavaScript to run in the page after every load — a dev login, say
 //   watermark  false to leave the banner off videos and "made with lantern" out of a frame's footer
 //   footer  the frame's footer, in place of "lantern · note · branch · time"
-//   branch  false to leave the branch name out of the footer and banner (a branch named after an internal environment, say)
-//   accent  the colour of highlights, click rings and the frame's glyph: "#ff7a2f"
-//   update  false to stop the daemon's daily check for a newer lantern (LANTERN_UPDATE=off in the environment)
+//   branch  false to leave the branch name out of the footer and banner
+//   accent  the colour of highlights, click rings and the glyph: "#ff7a2f"
+//   update  false to stop the daemon's daily check for a newer lantern
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -23,14 +23,12 @@ import path from 'node:path'
 
 export type Config = { url?: string; hosts?: string[]; out?: string; note?: string; onLoad?: string; watermark?: boolean; footer?: string; accent?: string; update?: boolean; branch?: boolean }
 export const KEYS = ['url', 'hosts', 'out', 'note', 'onLoad', 'watermark', 'footer', 'accent', 'update', 'branch'] as const
-export type Source = 'environment' | 'home' | 'repo' | 'user'
 
+/** lantern's own folder (LANTERN_HOME, or ~/.lantern), and the hash every instance of a project shares. */
 /** lantern's own folder (LANTERN_HOME, or ~/.lantern), and the hash every instance of a project shares. */
 export const home = process.env.LANTERN_HOME || path.join(os.homedir(), '.lantern')
 export const projectKey = (root: string) => { let real = root; try { real = fs.realpathSync(root) } catch {}; return crypto.createHash('sha1').update(real).digest('hex').slice(0, 12) }
-/** The settings file for a project in lantern's folder: outside the repository, for what must not be committed. */
-export const homeSettingsFile = (root: string) => path.join(home, 'projects', `${projectKey(root)}.json`)
-/** The user's defaults for every project. */
+/** The user's own settings: the top of the walk. */
 export const userSettingsFile = () => path.join(home, 'settings.json')
 
 const ENV: Record<(typeof KEYS)[number], string> = { url: 'LANTERN_URL', hosts: 'LANTERN_HOSTS', out: 'LANTERN_OUT', note: 'LANTERN_NOTE', onLoad: 'LANTERN_ON_LOAD', watermark: 'LANTERN_WATERMARK', footer: 'LANTERN_FOOTER', accent: 'LANTERN_ACCENT', update: 'LANTERN_UPDATE', branch: 'LANTERN_BRANCH' }
@@ -39,11 +37,20 @@ const list = (v: unknown): string[] | undefined => (typeof v === 'string' ? v.sp
 const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : typeof v === 'string' ? !['off', 'false', '0'].includes(v.toLowerCase()) : undefined)
 const readJson = (f: string): Record<string, unknown> => { try { const j = JSON.parse(fs.readFileSync(f, 'utf8')); return j && typeof j === 'object' ? j : {} } catch { return {} } }
 
-/** The settings in force for a project, and where each came from. */
-export function readSettings(root: string): { config: Config; sources: Partial<Record<(typeof KEYS)[number], Source>>; homeFile: string; repoFile: string; userFile: string } {
-  const homeFile = homeSettingsFile(root), repoFile = path.join(root, '.lantern.json'), userFile = userSettingsFile()
-  const layers: [Source, Record<string, unknown>][] = [['environment', Object.fromEntries(KEYS.map((k) => [k, process.env[ENV[k]]]))], ['home', readJson(homeFile)], ['repo', readJson(repoFile)], ['user', readJson(userFile)]]
-  const config: Config = {}, sources: Partial<Record<(typeof KEYS)[number], Source>> = {}
+/** The settings files that apply to a project: .lantern/settings.json from the project folder up, nearest first, then the user's own. */
+export function settingsFiles(root: string): string[] {
+  const out: string[] = []
+  let dir = path.resolve(root)
+  for (;;) { const f = path.join(dir, '.lantern', 'settings.json'); if (fs.existsSync(f)) out.push(f); const up = path.dirname(dir); if (up === dir) break; dir = up }
+  const mine = userSettingsFile(); if (!out.includes(mine) && fs.existsSync(mine)) out.push(mine)
+  return out
+}
+
+/** The settings in force for a project, and where each came from: 'environment', or the path of the file. */
+export function readSettings(root: string): { config: Config; sources: Partial<Record<(typeof KEYS)[number], string>>; files: string[]; userFile: string } {
+  const files = settingsFiles(root)
+  const layers: [string, Record<string, unknown>][] = [['environment', Object.fromEntries(KEYS.map((k) => [k, process.env[ENV[k]]]))], ...files.map((f): [string, Record<string, unknown>] => [f, readJson(f)])]
+  const config: Config = {}, sources: Partial<Record<(typeof KEYS)[number], string>> = {}
   for (const k of KEYS) {
     for (const [source, layer] of layers) {
       const raw = layer[k]
@@ -53,7 +60,7 @@ export function readSettings(root: string): { config: Config; sources: Partial<R
       ;(config as any)[k] = v; sources[k] = source; break
     }
   }
-  return { config, sources, homeFile, repoFile, userFile }
+  return { config, sources, files, userFile: userSettingsFile() }
 }
 
 export const readConfig = (root: string): Config => readSettings(root).config

@@ -37,7 +37,7 @@ npm install -g @benwallacestock/lantern
 That installs the CLI and links its skills into `~/.claude/skills` (and into `~/.codex/skills` when Codex is set up). Open a new Claude Code or Codex session and ask it to look at, check, demo or screenshot something in your app. From then on lantern updates itself, skills included: it checks npm once a day and installs a newer version in the background.
 
 - `lantern skills` shows where the links point; `lantern skills install` makes them again; `LANTERN_SKILLS=off` on the install skips them.
-- `lantern update` updates now; `LANTERN_UPDATE=off` (or `update: false` in `.lantern.json`) turns the daily check off; `lantern version` says when a newer one is out.
+- `lantern update` updates now; `LANTERN_UPDATE=off` (or `update: false` in a settings file) turns the daily check off; `lantern version` says when a newer one is out.
 - `LANTERN_CHROME=/path/to/chrome` picks the browser. Without installing: `npx -y @benwallacestock/lantern <command>`, slower to start.
 
 **Claude Code plugin instead.** The same skills through `/plugin`, for a team that manages skills that way (pick one path, not both):
@@ -66,14 +66,13 @@ Pictures and videos go in `<project>/tmp/lantern/`, which lantern adds to `.git/
 
 ## Settings
 
-Most projects need none. Settings come from four places, the first that has a value winning; `lantern settings` prints what is in force, where each value came from, and the paths of the files:
+Most projects need none. Any folder from the project up to the root can hold a `.lantern/settings.json`; the nearer the file, the stronger, merged key by key, the way Claude Code reads its `.claude` folders. Your own `~/.lantern/settings.json` is the top of that walk. The environment of the command that starts the daemon (`LANTERN_URL`, `LANTERN_ON_LOAD`, …) wins over every file. So:
 
-1. The environment of the command that starts the daemon: `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_ON_LOAD` and so on, which is what a tool that spawns agent sessions sets for them.
-2. `~/.lantern/projects/<hash>.json`, lantern's own folder, outside the repository: this machine's settings for the project, and the place for a dev login or anything else with a secret in it, so nothing of lantern's needs to be in the repo at all. Plain JSON; `lantern settings` prints the path. A tool that sets lantern up for people (forest does) writes this file rather than one in the tree.
-3. `.lantern.json` at the project root, for a team that chooses to commit the project's URL and hosts.
-4. `~/.lantern/settings.json`, your defaults for every project: an accent, a footer, `update: false`.
+- A team commits `.lantern/settings.json` in the repo for the app's URL and hosts.
+- A tool that keeps many checkouts under one folder puts what they share, a dev login say, in that folder's `.lantern/settings.json`, and never writes into a checkout; what differs per checkout it passes in the environment.
+- A person keeps defaults in `~/.lantern/settings.json` and customises one run with `LANTERN_*`.
 
-The daemon reads settings when it starts (`lantern close` after a change). The files take the same keys:
+`lantern settings` prints what is in force, where each value came from, and the files it found. The daemon reads settings when it starts (`lantern close` after a change). The keys:
 
 ```json
 {

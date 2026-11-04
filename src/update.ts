@@ -3,7 +3,7 @@
 // command notices the build changed and restarts the daemon (bin/lantern.ts), so the update just lands. The skills
 // that ship in the package are linked into the agent's skills folder by `lantern skills install`, so they come
 // along with every update. `lantern update` does the check and the install on demand; LANTERN_UPDATE=off (or
-// `update: false` in .lantern.json) turns the daily check off.
+// `update: false` in a settings file) turns the daily check off.
 import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'

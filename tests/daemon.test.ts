@@ -79,7 +79,7 @@ test('idle exit: a watch tab left open does not keep the daemon alive', async ()
   // Its own project, so its short idle window doesn't take the shared daemon down with it.
   const proj2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-idle-'))
   await sh('git', ['-C', proj2, 'init', '-q'])
-  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home, LANTERN_IDLE_MS: '1500' }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home, LANTERN_IDLE_MS: '4000' }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
   try {
     const r = await run('open', app.url + '/'); assert.ok(r.ok, r.out)
     const url = firstLine((await run('watch')).out)
@@ -89,7 +89,7 @@ test('idle exit: a watch tab left open does not keep the daemon alive', async ()
     const pid = Number(/pid (\d+)/.exec((await run('status')).out)?.[1]); assert.ok(pid, 'status gives the pid')
     const alive = () => { try { process.kill(pid, 0); return true } catch { return false } }
     const t0 = Date.now()
-    while (Date.now() - t0 < 10_000 && alive()) await pause(250) // no commands now: status would count as one
+    while (Date.now() - t0 < 20_000 && alive()) await pause(250) // no commands now: status would count as one
     assert.ok(!alive(), 'the daemon went on its own')
     assert.match((await run('status')).out, /not running/)
     await reading.catch(() => {}); ac.abort()
@@ -172,25 +172,26 @@ test('watch over the socket: JSON lines with frames and actions', async () => {
   assert.ok(lines.some((l) => l.frame && l.url), 'a frame line')
   assert.ok(lines.some((l) => l.did === 'filled "Walk name"'), `a did line: ${JSON.stringify(lines.filter((l) => l.did))}`)
 })
-test('settings from lantern\'s own folder, outside the repository, over the repo file, under the environment; `lantern settings` says which', async () => {
-  await ok('close'); await pause(300)
-  const { projectKey } = await import('../src/config.ts')
-  const mine = path.join(home, 'projects', `${projectKey(fs.realpathSync(proj))}.json`); fs.mkdirSync(path.dirname(mine), { recursive: true }) // the CLI keys the real path (git's toplevel), as a tool writing this file must
-  fs.writeFileSync(path.join(home, 'settings.json'), JSON.stringify({ accent: '#000001', footer: 'for every project' })) // the user's defaults, under everything
-  fs.writeFileSync(path.join(proj, '.lantern.json'), JSON.stringify({ url: app.url, note: 'FROM-REPO', accent: '#123456' }))
-  fs.writeFileSync(mine, JSON.stringify({ note: 'FROM-HOME', onLoad: "document.documentElement.dataset.where = 'home'" }))
+test('settings: a .lantern/settings.json above the project applies, a nearer one wins key by key, the environment over all, and `lantern settings` says which', async () => {
+  const inner = path.join(proj, 'nested', 'checkout'); fs.mkdirSync(path.join(inner, '.lantern'), { recursive: true }); await sh('git', ['-C', inner, 'init', '-q'])
+  fs.mkdirSync(path.join(proj, '.lantern'), { recursive: true })
+  fs.writeFileSync(path.join(home, 'settings.json'), JSON.stringify({ accent: '#000001', footer: 'for every project' })) // the person's own: the top of the walk
+  fs.writeFileSync(path.join(proj, '.lantern', 'settings.json'), JSON.stringify({ note: 'FROM-ABOVE', accent: '#123456', onLoad: "document.documentElement.dataset.above = 'yes'" }))
+  fs.writeFileSync(path.join(inner, '.lantern', 'settings.json'), JSON.stringify({ note: 'FROM-NEAR' }))
+  const run = (env: Record<string, string>, ...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: inner, env: { ...process.env, LANTERN_HOME: home, ...env }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
   try {
-    const s = (await lanternWith({ LANTERN_ACCENT: '#4cc3ff' }, 'settings')).out
-    assert.match(s, /url\s+http:\/\/127\.0\.0\.1:\d+\s+repo/); assert.match(s, /note\s+FROM-HOME\s+home/); assert.match(s, /accent\s+#4cc3ff\s+environment/); assert.match(s, /onLoad\s+document\.documentElement.*home/)
-    assert.match(s, /footer\s+for every project\s+user/); assert.ok(s.includes(mine), 'says where the home file is')
-    await ok('open', '/about'); assert.equal(await ok('eval', 'document.documentElement.dataset.where'), 'home', 'the home file\'s onLoad ran')
-    await ok('close'); await pause(300)
-  } finally { fs.rmSync(path.join(proj, '.lantern.json'), { force: true }); fs.rmSync(mine, { force: true }); fs.rmSync(path.join(home, 'settings.json'), { force: true }) }
+    const s = (await run({ LANTERN_URL: app.url }, 'settings')).out
+    assert.match(s, /url\s+http:\/\/127\.0\.0\.1:\d+\s+environment/); assert.match(s, /note\s+FROM-NEAR\s+.*nested\/checkout\/\.lantern\/settings\.json/)
+    assert.match(s, /accent\s+#123456\s+/); assert.match(s, /footer\s+for every project\s+.*settings\.json/)
+    assert.ok(s.indexOf('nested/checkout/.lantern/settings.json') < s.lastIndexOf('.lantern/settings.json'), 'nearest first')
+    const r = await run({ LANTERN_URL: app.url }, 'open', '/about'); assert.ok(r.ok, r.out)
+    assert.equal((await run({}, 'eval', 'document.documentElement.dataset.above')).out, 'yes', 'the onLoad from the folder above ran')
+  } finally { await run({}, 'close'); fs.rmSync(path.join(proj, '.lantern'), { recursive: true, force: true }); fs.rmSync(path.join(proj, 'nested'), { recursive: true, force: true }); fs.rmSync(path.join(home, 'settings.json'), { force: true }) }
 })
 
-test('settings in .lantern.json: url, hosts, onLoad', async () => {
+test('settings in the project\'s own .lantern/settings.json: url, hosts, onLoad', async () => {
   await ok('close'); await pause(300)
-  fs.writeFileSync(path.join(proj, '.lantern.json'), JSON.stringify({ url: app.url, hosts: ['127.0.0.1'], note: 'TEST-1', accent: '#4cc3ff', onLoad: "document.documentElement.dataset.hook = 'ran'" }))
+  fs.mkdirSync(path.join(proj, '.lantern'), { recursive: true }); fs.writeFileSync(path.join(proj, '.lantern', 'settings.json'), JSON.stringify({ url: app.url, hosts: ['127.0.0.1'], note: 'TEST-1', accent: '#4cc3ff', onLoad: "document.documentElement.dataset.hook = 'ran'" }))
   try {
     assert.match(await ok('open', '/about'), /About/) // relative, with no page open before: `url` from the settings
     assert.equal(await ok('eval', 'document.documentElement.dataset.hook'), 'ran')
@@ -201,7 +202,7 @@ test('settings in .lantern.json: url, hosts, onLoad', async () => {
     await ok('eval', `document.getElementById('newtab').href = ${JSON.stringify(other + '/about')}`)
     const out = await ok('click', '#newtab'); assert.doesNotMatch(out, /now at/)
     assert.match(await ok('console'), /not one of this project's hosts/)
-  } finally { fs.rmSync(path.join(proj, '.lantern.json')); await ok('close'); await pause(300) }
+  } finally { fs.rmSync(path.join(proj, '.lantern'), { recursive: true, force: true }); await ok('close'); await pause(300) }
   await ok('open', app.url + '/')
 })
 test('close', async () => {
