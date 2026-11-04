@@ -2,6 +2,13 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.3.4 — 2026-11-04
+
+### Fixed
+- Record: the frame stays for the whole video, and the "made with lantern" mark lines up with its words
+  - The title, footer and rounded corners vanished after the first frame: the frame is one still laid over the clip, and ffmpeg dropped it once that one-frame input ended; it is looped now, and a test checks a corner well into the clip
+  - The mark's glyph is cropped to its drawing, so it no longer sits high and to the left of the words
+
 ## 0.3.3 — 2026-11-04
 
 ### Fixed
