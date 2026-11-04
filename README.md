@@ -21,7 +21,7 @@ lantern record caption "Ask for a quote"
 lantern click "text=Get a quote"
 lantern record stop                    # → tmp/lantern/demo-….mp4
 
-lantern watch                          # a live view of the page, in your own browser
+lantern watch                          # a URL for a live view of the page in your own browser (--open opens it)
 ```
 
 Each command is a short-lived process. The first one starts a daemon for the project that owns the Chrome and the page, so the page survives between commands however long the agent thinks in between. It closes itself half an hour after the last command (a live view left open in a tab doesn't keep it up), or on `lantern close`. No window, no app, no debugging port: Chrome is driven over its pipe.
@@ -58,7 +58,7 @@ The plugin brings the skills only; the skill installs the CLI when it is missing
 - **Frames for a pull request**: one picture, a before/after pair, or numbered steps, with a title drawn in, rounded corners, a shadow, and the branch and time in the footer. A recording started with `--title` gets the same frame as a video.
 - **Demo videos**: frames are kept only while a command runs and for a beat after, so the agent's thinking between commands is cut; captions hold for at least 2.5 seconds; the pointer glides to each target; a ring and a little mouse show each click; a keycap strip shows typing; a pill shows scrolling. ffmpeg assembles an MP4 when it is installed; otherwise Chrome encodes the video itself (MP4 where it can, WebM otherwise; GitHub plays both inline).
 
-- **A live view** for a person: `lantern watch` opens a page in your own browser showing what the agent's page paints, with a line saying what it just did. Tools that embed lantern (forest's Agent Browser panel) get the same frames as JSON lines over the daemon's socket.
+- **A live view** for a person: `lantern watch` prints the URL of a page (`--open` opens it) that shows what the agent's page paints, with a line saying what it just did. Tools that embed lantern (forest's Agent Browser panel) get the same frames as JSON lines over the daemon's socket.
 
 Pictures and videos go in `<project>/tmp/lantern/`, which lantern adds to `.git/info/exclude` so nothing lands in git.
 

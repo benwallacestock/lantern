@@ -31,7 +31,7 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern record caption <text> a line along the bottom of the video until the next caption (or caption off)
   lantern record stop           assemble the recording into an MP4 and print its path
 
-  lantern watch               a live view of the page in your own browser (prints a URL and opens it; --no-open to just print)
+  lantern watch               a live view of the page for a person: prints a URL to open in a browser (--open opens it for you)
   lantern status · close      is lantern up for this project; close its browser (it closes itself 30 minutes after the last command)
   lantern update              install the latest lantern now (a global npm install checks once a day and updates itself)
   lantern skills install      link the skills in this package into ~/.claude/skills (and Codex's), so they follow every update

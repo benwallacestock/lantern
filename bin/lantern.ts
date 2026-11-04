@@ -106,8 +106,8 @@ async function main() {
     // A live view of the page in your own browser, for a person who wants to see what the agent is doing.
     const r = await ask({ cmd: 'preview' })
     if (!r.ok) die(r.text)
-    console.log(`${r.text}\nwatching ${root} — the page lantern is driving, live. Open it in a browser; it closes when lantern does.`)
-    if (!rest.includes('--no-open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
+    console.log(`${r.text}\nwatching ${root} — the page lantern is driving, live. Open that in a browser (or \`lantern watch --open\`); it closes when lantern does.`)
+    if (rest.includes('--open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
     process.exit(0)
   }
   if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${version()}${updateHint(P.home)}`); return }

@@ -50,7 +50,7 @@ test('the last page comes back after Chrome dies or the socket is lost', async (
 })
 test('watch: a live preview page streams frames and actions', async () => {
   await ok('open', '/')
-  const out = await ok('watch', '--no-open')
+  const out = await ok('watch')
   const url = firstLine(out); assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/$/)
   const html = await (await fetch(url)).text(); assert.match(html, /\/stream/); assert.match(html, /\/events/)
   // The stream: the first frame comes at once (the last one painted), more as the page changes.
@@ -82,7 +82,7 @@ test('idle exit: a watch tab left open does not keep the daemon alive', async ()
   const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home, LANTERN_IDLE_MS: '1500' }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
   try {
     const r = await run('open', app.url + '/'); assert.ok(r.ok, r.out)
-    const url = firstLine((await run('watch', '--no-open')).out)
+    const url = firstLine((await run('watch')).out)
     const ac = new AbortController()
     const res = await fetch(url + 'stream', { signal: ac.signal }) // a tab watching, as one left open overnight
     const reading = res.body!.getReader().read()
