@@ -2,6 +2,12 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.3.3 — 2026-11-04
+
+### Fixed
+- Frame: the title, captions and footer are sized to the frame's longer side, so a tall frame reads the same as a wide one
+  - A stacked pair or a phone shot is fitted to its height in a viewer or a chat, and its type came out small; the video banner follows the same rule
+
 ## 0.3.2 — 2026-11-04
 
 ### Fixed
