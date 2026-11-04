@@ -2,6 +2,15 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.3.2 — 2026-11-04
+
+### Fixed
+- Skills: annotate every picture and every demo step, not only when a callout seems too much
+  - The lantern skill says to mark a picture before shooting it (a callout for the result, badges for steps, a ring or arrow for a detail) and to blur personal data, and when a bare screenshot is right
+  - The demo-video skill asks for at least one annotation per result and to clear them between steps; its frame and size wording match 0.2.0 (a banner on every video, no glyph, the clip at 2x)
+  - AGENTS.md: a skill change is a fix: or a feat:, since the skills ship in the package
+- `lantern watch` prints the live view's URL and leaves the browser alone; `--open` opens it
+
 ## 0.3.1 — 2026-11-04
 
 ### Fixed
