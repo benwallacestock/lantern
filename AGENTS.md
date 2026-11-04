@@ -9,7 +9,7 @@ Write commit subjects in the [Conventional Commits](https://www.conventionalcomm
 - `feat: …` — something new a user can do or see. A minor bump (0.2.1 → 0.3.0).
 - `fix: …` — something that was wrong and is right now. A patch (0.2.1 → 0.2.2).
 - `perf: …`, `refactor: …`, or a subject with no type — any other change to the program. A patch.
-- `docs: …`, `chore: …`, `ci: …`, `test: …`, `style: …`, `build: …` — nothing a user would notice. No release.
+- `docs: …`, `chore: …`, `ci: …`, `test: …`, `style: …`, `build: …` — nothing a user would notice. No release. The skills in `skills/` are part of the product and ship in the package, so a change to them is a `fix:` or a `feat:` (with scope `skills`), never `docs:`.
 - `feat!: …` (or `BREAKING CHANGE:` in the body) — a major bump once past 1.0; before 1.0 it is a minor bump, and 1.0 is chosen by hand with `node scripts/release.ts 1.0.0`.
 
 A scope is welcome and shows in the notes: `feat(record): a banner on every video` → "Record: a banner on every video". Keep the subject one line of plain words with a verb; put detail in the body as `- ` lines, which become sub-points under it in the notes. Everything else in the body (reasoning, attribution) stays out of the notes.
