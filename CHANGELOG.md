@@ -2,6 +2,15 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.7.0 — 2026-11-04
+
+### Added
+- Settings live in .lantern/settings.json, read from the project folder upward, the nearer the stronger
+  - Any folder from the project up to the root can hold `.lantern/settings.json`, merged key by key with the nearer file winning, the way Claude Code reads its `.claude` folders; `~/.lantern/settings.json` is the top of the walk; `LANTERN_*` in the environment wins over every file
+  - A tool that keeps many checkouts under one folder puts what they share (a dev login) in that folder's `.lantern/settings.json` and passes what differs in the environment, so nothing of lantern's is written into a checkout or into another tool's folder
+  - `.lantern.json` and `~/.lantern/projects/<hash>.json` (0.6.0) are no longer read: move their contents to a `.lantern/settings.json`
+  - `lantern settings` lists the files it found, nearest first, with each value's source
+
 ## 0.6.0 — 2026-11-04
 
 ### Added
