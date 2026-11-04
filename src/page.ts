@@ -29,6 +29,7 @@ type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: strin
 export const SETTLE = 1500
 const SCALE = 2
 const PRESETS: Record<string, [number, number]> = { phone: [390, 844], tablet: [1024, 768], laptop: [1280, 800], desktop: [1440, 900], wide: [1920, 1080] }
+const NAV = new Set(['open', 'reload', 'back']) // commands that navigate: the page is checked for input afterwards
 const [REC_W, REC_H] = [1440, 900] // the size to start at and to record at unless the agent chose one: 16:10, a reviewer's screen
 const MODS: Record<string, number> = { alt: 1, option: 1, ctrl: 2, control: 2, meta: 4, cmd: 4, command: 4, shift: 8 }
 /** Key names for characters, as apps that look at `event.code` (shortcuts, games) expect. */
@@ -253,9 +254,18 @@ export class Page {
     const at = await this.evaluate<Spot & { error?: string }>(locateJs(target, scroll))
     if (at.error) throw new Error(at.error)
     if (!scroll) return at
-    await sleep(120) // let the scroll-into-view land before aiming at it
-    const again = await this.evaluate<Spot & { error?: string }>(locateJs(target))
-    const spot = again.error ? at : { ...again, name: at.name, matches: at.matches }
+    // Let the scroll-into-view land before aiming: a smooth scroll or a layout animation moves the box for a while, and a
+    // click aimed mid-way lands on whatever was passing. Wait until two readings agree.
+    let again = at
+    for (let i = 0, last = at; i < 8; i++) {
+      await sleep(i ? 80 : 120)
+      const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false))
+      if (now.error) break
+      again = now
+      if (Math.abs(now.x - last.x) < 1 && Math.abs(now.y - last.y) < 1 && i > 0) break
+      last = now
+    }
+    const spot = again === at ? at : { ...again, name: at.name, matches: at.matches }
     if (spot.covered && !allowCovered) throw new Error(`"${spot.name}" is covered by ${spot.covered}, which would get the click instead — close what is in front of it, or scroll it clear`)
     return spot
   }
@@ -336,10 +346,17 @@ export class Page {
   async run(sub: string, rest: string[], cwd: string): Promise<Reply> {
     if (sub !== 'open' && sub !== 'size' && sub !== 'status') await this.restoreIfBlank()
     this.navigated = false
-    const r = await this.command(sub, rest, cwd)
-    // A page that navigated while being clicked or typed into has, now and then, stopped taking input afterwards (Chrome's
-    // own UI taking the focus, as far as can be told). Check, rather than report success into the void.
-    if (this.navigated && INPUT.has(sub) && !(await this.takesInput())) { this.dead = true; this.note('the page stopped taking input after that navigation; the browser is being restarted') }
+    let r: Reply
+    try { r = await this.command(sub, rest, cwd) }
+    catch (e) {
+      // An input call Chrome never answered is the surest sign the page has gone deaf: say so, and have the browser restarted.
+      if (/did not answer \(Input\./.test((e as Error).message)) { this.dead = true; throw new Error('the page stopped taking input (Chrome never answered the event); the browser is being restarted — run that again') }
+      throw e
+    }
+    // A page has, now and then, stopped taking input — after a navigation while it was being clicked or typed into (Chrome's
+    // own UI taking the focus, as far as can be told), after a reload, or on a page that paints heavily. Clicks then print
+    // success into the void. Check after a navigation of any kind, rather than report success into the void.
+    if (this.navigated && (INPUT.has(sub) || NAV.has(sub)) && !(await this.takesInput())) { this.dead = true; this.note('the page stopped taking input after that navigation; the browser is being restarted') }
     return { ...r, text: this.preface() + r.text }
   }
   /** Does a key sent to the page arrive? A Shift press changes nothing on a page. Asked twice, with time to answer,
@@ -674,6 +691,7 @@ export class Page {
   private async record(rest: string[]): Promise<Reply> {
     const what = rest[0]
     if (what === 'start') {
+      if (!(await this.takesInput())) { this.dead = true; return { ok: false, text: 'the page had stopped taking input (clicks would have done nothing); the browser is being restarted — run `record start` again' } }
       if (this.rec) return { ok: false, text: `already recording (${this.rec.frames.length} frames so far) — \`lantern record stop\` first` }
       // record start --title "What it shows" [--note ABC-123] [--footer "…"]: the video gets a frame, as a still does.
       const opts: { title?: string; note?: string; footer?: string } = {}
@@ -709,7 +727,12 @@ export class Page {
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
       const cast = r.frames.slice(1)
       const same = cast.length <= 2 && cast.every((f) => { try { return fs.readFileSync(f.file).equals(fs.readFileSync(cast[0].file)) } catch { return false } })
-      if (r.frames.length < 2 || same) { fs.rmSync(r.dir, { recursive: true, force: true }); return { ok: false, text: 'nothing was recorded: the page never changed while recording' } }
+      if (r.frames.length < 2 || same) {
+        fs.rmSync(r.dir, { recursive: true, force: true })
+        // Actions that printed success and a page that never changed: the usual cause is a page that stopped taking input.
+        if (!(await this.takesInput())) { this.dead = true; return { ok: false, text: 'nothing was recorded, and the page has stopped taking input — that is why the actions did nothing. The browser is being restarted: record it again' } }
+        return { ok: false, text: 'nothing was recorded: the page never changed while recording (if the actions printed success and the app did not react, `lantern close` then `open`, and record again)' }
+      }
       // Each frame shows until the next; a long gap (the agent thinking) is cut to a beat, so the clip is the interactions, not the waiting.
       const GAP = 1.2, MIN = 1 / 30, HOLD = 2.5 // each frame shows for the time until the next: real time, never slowed
       const durs = r.frames.map((f, i) => { const next = r.frames[i + 1]; return next ? Math.max(MIN, Math.min(GAP, (next.t - f.t) / 1000)) : 1.5 })

@@ -31,7 +31,7 @@ A change you can't see working isn't done. This is the pass to make after the co
 
 - A framed picture: `lantern screenshot "text=the thing"` (the page with it glowing), or `lantern callout "text=the thing" "what it means"` then `lantern screenshot`, then `lantern frame … --title "What this shows"`.
 - A demo video when a still can't carry it: a flow, a drag, something that moves. `lantern record start --title "…"`, captions, `record stop`.
-- Attach them to the pull request with `gh pr create|edit|comment --attach`, and say in the description what you checked and what the console said. Never commit anything from `tmp/lantern/`.
+- Attach them to the pull request with `gh pr create|edit|comment --attach` (gh 2.99+; with an older gh, say where the files are and ask the person to drag them in), and say in the description what you checked and what the console said. Never commit anything from `tmp/lantern/`.
 
 ## 5. Say what you found
 

@@ -61,15 +61,15 @@ async function dispatch(req: any): Promise<Reply> {
   switch (req.cmd) {
     case 'status': return { ok: true, text: `lantern is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}` }
     case 'close': await stop('asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
-    case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, mark: CONFIG.watermark !== false, ...req }, P.out)
+    case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, mark: CONFIG.watermark !== false, ...req, ...(CONFIG.branch === false ? { branch: undefined } : {}) }, P.out)
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
     case 'browser': {
       const p = await thePage()
-      if (req.branch) p.branch = req.branch
+      if (req.branch && CONFIG.branch !== false) p.branch = req.branch
       const args: string[] = req.args ?? []
       const rolling = RECORDS.has(args[0])
       if (p.rec && rolling) p.rec.until = Infinity // frames are kept while an action runs…
-      try { const r = await p.run(args[0], args.slice(1), req.cwd ?? root); if (r.ok && ACTS.has(args[0])) p.did(r.text.split('\n')[0].slice(0, 90)); if (p.dead && !p.rec) { const note = await relaunch(); return { ...r, text: note + r.text } } return r }
+      try { const r = await p.run(args[0], args.slice(1), req.cwd ?? root); if (r.ok && ACTS.has(args[0])) p.did(r.text.split('\n')[0].slice(0, 90)); if (p.dead) { if (p.rec) { try { fs.rmSync(p.rec.dir, { recursive: true, force: true }) } catch {}; p.rec = undefined; r.text = 'the recording was abandoned: ' + r.text } const note = await relaunch(); return { ...r, text: note + r.text } } return r }
       finally { if (p.rec && rolling) p.rec.until = Date.now() + SETTLE } // …and for a beat after, while the page settles
     }
     default: return { ok: false, text: `lantern does not know that request (${req.cmd})` }

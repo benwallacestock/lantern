@@ -37,7 +37,7 @@ lantern record caption off                             # no caption for a while,
 lantern record stop                                    # → tmp/lantern/demo-….mp4 and its length
 ```
 
-Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the demo shows'` (or `--attach` on `pr create` / `pr comment`; gh 2.80+). GitHub plays MP4 inline. Never commit it.
+Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the demo shows'` (or `--attach` on `pr create` / `pr comment`; gh 2.99+ — an older gh has no `--attach`, so say where the file is and ask the person to drag it into the PR). GitHub plays MP4 inline. Never commit it.
 
 ## What goes wrong
 

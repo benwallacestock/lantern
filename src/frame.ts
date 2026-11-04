@@ -69,7 +69,8 @@ export async function frame(chrome: Chrome, req: FrameReq, outDir: string): Prom
     await s('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: false })
     await sleep(300) // let it paint at the new size
     const shot = await s<{ data: string }>('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: w, height: h, scale: 1 }, captureBeyondViewport: true })
-    const out = req.out ? path.resolve(req.cwd, req.out) : path.join(outDir, `framed-${new Date().toISOString().replace(/[:.]/g, '-')}.png`)
+    // --out: a path is a path; a bare name goes in the pictures folder, so it can't land in the project root (and a commit) by accident.
+    const out = req.out ? (req.out.includes('/') || req.out.includes('\\') ? path.resolve(req.cwd, req.out) : path.join(outDir, req.out)) : path.join(outDir, `framed-${new Date().toISOString().replace(/[:.]/g, '-')}.png`)
     fs.writeFileSync(out, Buffer.from(shot.data, 'base64'))
     return { ok: true, text: `${out}\n(${w * 2}×${h * 2}${req.title ? '' : ' — untitled: pass --title "what it shows" so the picture says what it is wherever it ends up'})` }
   } finally { await chrome.send('Target.closeTarget', { targetId }).catch(() => {}) }

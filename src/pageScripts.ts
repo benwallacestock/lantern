@@ -128,7 +128,7 @@ export const locateJs = (target: string, scroll = true) => String.raw`
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2
   // What is really at that point: if it is neither the element nor part of it, a click there goes somewhere else.
   let covered = null
-  if (scroll && cx >= 0 && cy >= 0 && cx <= innerWidth && cy <= innerHeight) {
+  if (cx >= 0 && cy >= 0 && cx <= innerWidth && cy <= innerHeight) {
     const root = el.getRootNode(); let at = (root.elementFromPoint ? root : document).elementFromPoint(cx, cy)
     while (at && at.shadowRoot && at.shadowRoot.elementFromPoint) { const inner = at.shadowRoot.elementFromPoint(cx, cy); if (!inner || inner === at) break; at = inner }
     const lab = at && at.closest && at.closest('label')

@@ -66,7 +66,8 @@ lantern screenshot                                       # after → after.png
 lantern screenshot "text=£1.80"                              # the information you're talking about, glowing, on the whole page
 lantern frame before.png after.png --title "Checkout totals"   # one PNG: Before above After, titled, with branch and time
 lantern frame after.png --title "The new empty state"                    # a single screenshot, framed
-gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'   # into the PR body (gh 2.80+); or --attach on pr create / pr comment
+gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'   # into the PR body (gh 2.99+); or --attach on pr create / pr comment.
+                                                                                 # An older gh has no --attach: say where the files are and ask the person to drag them into the PR
 ```
 
 - Always give `--title`: it is drawn into the frame as its heading, so the image says what it shows wherever it ends up (the PR, Slack, a ticket). Say what the pair is of ("Checkout totals"), not "before and after".
@@ -75,14 +76,14 @@ gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'
 - **Blur what must not be shared.** `lantern blur e14` blurs an element out — a real name, an email, an address, a balance — before the screenshot, so the picture can go in a PR or a message. Look for personal data on the page before every picture; your own test data is fine.
 - A small app in a big viewport makes a mostly empty picture: screenshot a region (`lantern screenshot 300,80,840,600`) or set a smaller `size` before taking it.
 - When the change is one component, screenshot just that: `lantern screenshot e12` gives the whole page with the element glowing (best for context); `--crop` gives only the element; or a region `x,y,w,h` in viewport pixels. The whole page when the change is the page; `--full` for a page longer or wider than the screen. Don't crop by hand: the frame is the crop. Screenshots and highlights scroll the target into view; for a picture from the top, `lantern scroll top` first. Pictures are 2x (a 1440×900 viewport gives a 2880×1800 PNG), the size a PR wants.
-- `--captions "Design|Built"` to name the panels (a design image can be a panel); `--note "SPR-123"` adds to the footer, `--footer "…"` replaces it (the branch shows only inside a git repo); `--out name.png` names the file; landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override). The footer carries a small "made with lantern" at its right.
+- The footer says lantern · note · branch · time, and the video's banner the same. The branch is the local branch name: if that is not for a PR (named after an internal environment, say), `--footer "…"` replaces the footer, or the project sets `footer` or `branch: false` in `.lantern.json`. `--captions "Design|Built"` names the panels (a design image can be a panel); `--note "SPR-123"` adds to the footer; `--out name.png` names the file (a bare name stays in the pictures folder); landscape pictures stack one above the other, portrait ones (a phone) sit side by side (`--side` / `--stack` to override). The footer carries a small "made with lantern" at its right.
 - Never commit anything from `tmp/lantern/`.
 
 For a change a still can't show — a drag, a flow across pages, something animating — record a demo: see the `lantern-demo-video` skill.
 
 ## Settings
 
-Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_OUT`, `LANTERN_NOTE`, `LANTERN_FOOTER`, `LANTERN_ACCENT`, `LANTERN_WATERMARK`, `LANTERN_ON_LOAD` in the environment) sets: `url`, where paths resolve before any page is open; `hosts`, the only hosts the page may visit; `out`, where pictures go; `note` and `footer`, for the frame; `accent`, the colour of highlights, rings and the glyph (lantern's orange by default); `watermark: false` to leave the banner off videos and "made with lantern" out of frames; `onLoad`, JavaScript run after every load (a dev login, say). If `open` says the browser only visits this project's hosts, that is the project's choice: stay on them.
+Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_OUT`, `LANTERN_NOTE`, `LANTERN_FOOTER`, `LANTERN_ACCENT`, `LANTERN_WATERMARK`, `LANTERN_ON_LOAD` in the environment) sets: `url`, where paths resolve before any page is open; `hosts`, the only hosts the page may visit; `out`, where pictures go; `note` and `footer`, for the frame; `accent`, the colour of highlights, rings and the glyph (lantern's orange by default); `watermark: false` to leave the banner off videos and "made with lantern" out of frames; `branch: false` to keep the branch name out of the footer; `onLoad`, JavaScript run after every load (a dev login, say). If `open` says the browser only visits this project's hosts, that is the project's choice: stay on them.
 
 ## What it can't do
 

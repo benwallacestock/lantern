@@ -48,7 +48,7 @@ test('frame: one picture, a pair, options', async () => {
   let out = await ok('frame', a, '--title', 'One picture'); let f = firstLine(out); assert.ok(fs.existsSync(f)); const one = pngSize(f); assert.ok(one.w > 2880 && one.h > 1800)
   out = await ok('frame', a, b, '--title=Before and after'); f = firstLine(out); const pair = pngSize(f); assert.ok(pair.h > one.h * 1.8, 'landscape pair stacks')
   out = await ok('frame', a, b, '--side', '--title', 'Side'); f = firstLine(out); assert.ok(pngSize(f).w > pair.w * 1.8, 'side by side is wider')
-  out = await ok('frame', a, '--out', 'my.png'); assert.ok(fs.existsSync(path.join(proj, 'my.png'))); assert.match(out, /untitled/)
+  out = await ok('frame', a, '--out', 'my.png'); assert.ok(fs.existsSync(path.join(proj, 'tmp', 'lantern', 'my.png')), 'a bare --out name stays in the pictures folder'); assert.match(out, /untitled/)
   out = await ok('frame', a, '--title', 'With my footer', '--footer', 'Just my words'); assert.ok(fs.existsSync(firstLine(out)))
   assert.match(await bad('frame'), /give a screenshot/)
   assert.match(await bad('frame', 'nope.png'), /no such image/)

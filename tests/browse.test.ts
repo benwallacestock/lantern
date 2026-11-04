@@ -175,6 +175,11 @@ test('a callout: label, line and glow, numbered, following the element, off agai
   assert.equal(await ok('eval', '!!document.querySelector(".__l-callout")'), 'true')
   await ok('callout', 'off'); assert.equal(await ok('eval', '!!document.querySelector(".__l-callout")'), 'false')
   assert.match(await bad('callout', '#result'), /needs the words/)
+  // Two callouts on neighbours keep off each other's labels.
+  await ok('callout', '#name', 'The name of the walk, which is a longer label so it needs room')
+  await ok('callout', '#notes', 'Notes for the walk, also a longer label so it needs room'); await ok('wait', '150')
+  assert.equal(await ok('eval', '(() => { const [a, b] = [...document.querySelectorAll(".__l-callout-label")].map((n) => n.getBoundingClientRect()); return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top })()'), 'false', 'the labels do not overlap')
+  await ok('clear')
 })
 
 test('badge, ring, arrow and blur: drawn, following, cleared by kind or all at once', async () => {

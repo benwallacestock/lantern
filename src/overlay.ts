@@ -140,7 +140,9 @@ export const UI_JS = String.raw`(() => {
           { lx: mid(r.left + r.width / 2 - lw / 2, innerWidth - lw - 8), ly: r.bottom + edge + gap, ax: r.left + r.width / 2, ay: r.bottom + edge },
           { lx: mid(r.left + r.width / 2 - lw / 2, innerWidth - lw - 8), ly: r.top - edge - gap - lh, ax: r.left + r.width / 2, ay: r.top - edge },
         ]
-        const fits = (s) => s.lx >= 4 && s.ly >= 4 && s.lx + lw <= innerWidth - 4 && s.ly + lh <= innerHeight - 4
+        const others = [...document.querySelectorAll('.__l-callout-label')].filter((n) => n !== label).map((n) => n.getBoundingClientRect())
+        const clear = (s) => !others.some((o) => s.lx < o.right && s.lx + lw > o.left && s.ly < o.bottom && s.ly + lh > o.top)
+        const fits = (s) => s.lx >= 4 && s.ly >= 4 && s.lx + lw <= innerWidth - 4 && s.ly + lh <= innerHeight - 4 && clear(s)
         const cost = (s) => { let c = 0; for (const [fx, fy] of [[.1, .5], [.5, .5], [.9, .5], [.5, .1], [.5, .9]]) { const hit = document.elementFromPoint(s.lx + lw * fx, s.ly + lh * fy); if (hit && hit !== document.body && hit !== document.documentElement && !hit.classList.contains('__lantern') && (hit.innerText || '').trim()) c++ } return c }
         const key = Math.round(r.left) + ':' + Math.round(r.top)
         if (!chosen || key !== at || !fits(chosen)) { let best = null, bestCost = 99; for (const s of spots) { if (!fits(s)) continue; const c = cost(s); if (c < bestCost) { bestCost = c; best = s } } chosen = best || spots.find(fits) || spots[2]; at = key }

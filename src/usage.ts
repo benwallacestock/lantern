@@ -40,4 +40,4 @@ Pictures, videos and downloads go in <project>/tmp/lantern. Needs a Chrome (or L
 Settings, in the environment or a .lantern.json at the project root: url (where paths resolve), hosts (the only hosts
 the page may visit), out (where pictures go), note and footer (for the frame), accent (the colour of what lantern draws),
 watermark (false to drop the banner from videos and "made with lantern" from frames), onLoad (JavaScript to run after each load),
-update (false to stop the daily check for a newer lantern).`
+update (false to stop the daily check for a newer lantern), branch (false to keep the branch name out of the footer).`
