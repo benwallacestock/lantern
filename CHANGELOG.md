@@ -2,6 +2,13 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.4.0 — 2026-11-04
+
+### Added
+- One command sets everything up — `npm install -g` links the skills for Claude Code and Codex itself
+  - A postinstall runs `lantern skills install` on a global install (not in CI, not with LANTERN_SKILLS=off), so there is nothing to run after it and every update brings the new skills
+  - The README's Install section is short and exact: the one command, what it does, the knobs, and the plugin path as an alternative
+
 ## 0.3.4 — 2026-11-04
 
 ### Fixed
