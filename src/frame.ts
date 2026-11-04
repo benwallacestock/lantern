@@ -26,14 +26,14 @@ function html(req: FrameReq): string {
   // one above the other, and keep their width; portrait ones (a phone) sit side by side. --side / --stack override.
   const sizes = req.images.map(pngSize)
   const stack = req.layout ? req.layout === 'stack' : n > 1 && sizes.every((s) => s.w > s.h)
-  // Title, captions and footer are a fixed fraction of the frame's longer side, so wherever the frame is shown
-  // fitted to a box (a pull request's column, a chat, a viewer that fits a tall frame to its height) the type is
-  // the same size on screen — whether the frame is one phone, two desktops wide, or two desktops tall. The floor
-  // is for frames smaller than that box, which display at their own size.
-  const shown = sizes.map((s) => ({ w: s.w * scale, h: s.h * scale }))
-  const across = stack ? Math.max(...shown.map((s) => s.w)) : shown.reduce((a, s) => a + s.w, 0) + 22 * (n - 1)
-  const tall = stack ? shown.reduce((a, s) => a + s.h, 0) + 22 * (n - 1) : Math.max(...shown.map((s) => s.h))
-  const u = Math.max(0.5, Math.max(across, tall) / 900)
+  // Title, captions and footer are a fixed fraction of the frame's width, so wherever frames are shown fitted to a
+  // column (a pull request, where every image is fitted to the same width) the type is the same size on screen
+  // from one frame to the next — one phone, two desktops wide, or a stacked pair. Not the longer side: a tall pair
+  // sized by its height came out with bigger type than the single shot beside it in the same pull request. The
+  // floor is for frames narrower than that column, which display at their own size.
+  const shown = sizes.map((s) => s.w * scale)
+  const across = stack ? Math.max(...shown) : shown.reduce((a, b) => a + b, 0) + 22 * (n - 1)
+  const u = Math.max(0.5, across / 900)
   return `<!doctype html><meta charset="utf-8"><style>${frameCss(u, req.accent ?? ORANGE, true)}
     .row { display: flex; gap: calc(22px * var(--u)); align-items: flex-start; }
     .row.stack { flex-direction: column; align-items: stretch; }
