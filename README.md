@@ -66,7 +66,14 @@ Pictures and videos go in `<project>/tmp/lantern/`, which lantern adds to `.git/
 
 ## Settings
 
-Most projects need none. A `.lantern.json` at the project root, or the same keys as `LANTERN_*` in the environment of the command that starts the daemon:
+Most projects need none. Settings come from three places, the first that has a value winning, and `lantern settings` prints what is in force and where each value came from:
+
+1. The environment of the command that starts the daemon: `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_ON_LOAD` and so on, which is what a tool that spawns agent sessions sets for them.
+2. `~/.lantern/projects/<hash>.json`, lantern's own folder, outside the repository: this machine's settings for the project, and the place for a dev login or anything else with a secret in it, so nothing of lantern's needs to be in the repo at all.
+3. `.lantern.json` at the project root, for a team that chooses to commit the project's URL and hosts.
+4. `~/.lantern/settings.json`, your defaults for every project: an accent, a footer, `update: false`.
+
+The files take the same keys:
 
 ```json
 {
