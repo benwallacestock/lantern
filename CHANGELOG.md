@@ -2,6 +2,17 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.5.0 — 2026-11-04
+
+### Added
+- Modifier clicks (`click --shift e12`), and the skill on drawing on a canvas
+  - `--shift`, `--alt`, `--ctrl`, `--cmd` ahead of a click's target hold that key, as a canvas tool asks (Shift to stop snapping); the fixture has a page that says which was held
+  - The lantern skill has a section on drawing on a map, a 3D scene or a diagram: coordinates off a full-resolution screenshot, zoom in, a 2D mode where the app has one, a screenshot after each point, hover before a button whose label depends on what is under the pointer — learnt drawing a roof face and filling it with panels on a 3D mesh
+
+### Fixed
+- Record: the page sees the pointer travel, so what follows the mouse follows it in the video
+  - While recording, the mouse moves along the glide path in eased steps rather than once at the destination, so a line drawn to the pointer, a hover state or a drag preview follows it instead of jumping; the fixture has a page that counts the moves
+
 ## 0.4.5 — 2026-11-04
 
 ### Fixed
