@@ -4,6 +4,13 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+### Added
+- lantern keeps itself current: a global npm install checks npm once a day (from the daemon, never in a command's way) and installs a newer lantern in the background; the next command restarts the browser on it. `lantern update` does it now; `lantern version` says when a newer one is out; `LANTERN_UPDATE=off` or `update: false` turns the check off.
+- `lantern skills install` links the skills shipped in the package into `~/.claude/skills` (and Codex's skills folder when Codex is set up), so they follow every update with nothing to run again; `lantern skills` shows where they point.
+
+### Changed
+- The Claude plugin's version now moves with each release, so plugin users get updates (it had stayed at 0.1.0).
+
 ## 0.2.0 — 2026-11-04
 
 ### Fixed

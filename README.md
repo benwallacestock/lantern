@@ -31,22 +31,22 @@ Each command is a short-lived process. The first one starts a daemon for the pro
 Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself. 
 
 ```bash
-npm install -g @benwallacestock/lantern      # the CLI; or run it without installing: npx -y @benwallacestock/lantern <command>
+npm install -g @benwallacestock/lantern
+lantern skills install
 ```
 
-**Claude Code** — the plugin brings the skills that teach Claude when and how to use it:
+That is the whole setup. The first line is the CLI; the second links the skills that ship inside it (`lantern`, `lantern-demo-video`, `lantern-verify`) into `~/.claude/skills` for Claude Code and, when it is set up on the machine, into Codex's skills folder. From then on lantern keeps itself current: the daemon asks npm once a day whether there is a newer version and installs it in the background, the next command restarts the browser on the new one, and the linked skills are the new ones too, with nothing to run again. `lantern update` does it now; `LANTERN_UPDATE=off` (or `update: false` in `.lantern.json`) turns the daily check off. `lantern version` says whether a newer one is out.
+
+Without installing: `npx -y @benwallacestock/lantern <command>` wherever a skill says `lantern` (slower to start, and the skills then need `lantern skills install` again after each new version).
+
+**Claude Code, as a plugin** — the same skills, if you would rather manage them with `/plugin`:
 
 ```
 /plugin marketplace add benwallacestock/lantern
 /plugin install lantern@lantern
 ```
 
-**Codex** — the same skills, with [skills](https://skills.sh) or by hand:
-
-```bash
-npx skills add benwallacestock/lantern
-# or: ln -s "$(npm root -g)/@benwallacestock/lantern/skills/"* ~/.codex/skills/
-```
+The plugin brings the skills only; the skill installs the CLI when it is missing. Plugins from a marketplace like this one update when you ask (`/plugin marketplace update lantern`) or when you turn on auto-update for the marketplace in `/plugin`.
 
 **Any other agent** — put the text of `skills/lantern/SKILL.md` where the agent reads its instructions.
 

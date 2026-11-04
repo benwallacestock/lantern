@@ -48,9 +48,11 @@ const lines = log.split('\n')
 lines.splice(un!.start, un!.end - un!.start, '## Unreleased', '', `## ${version} — ${today}`, '', un!.body, '')
 fs.writeFileSync(CHANGELOG, lines.join('\n').replace(/\n{3,}/g, '\n\n'))
 pkg.version = version
+// The Claude plugin's version moves with the package: users of the plugin get an update only when that changes.
+try { const pj = '.claude-plugin/plugin.json'; const plugin = JSON.parse(fs.readFileSync(pj, 'utf8')); plugin.version = version; fs.writeFileSync(pj, JSON.stringify(plugin, null, 2) + '\n') } catch {}
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
 try { const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8')); lock.version = version; if (lock.packages?.['']) lock.packages[''].version = version; fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\n') } catch {}
-sh('git', ['add', CHANGELOG, 'package.json', 'package-lock.json'])
+sh('git', ['add', CHANGELOG, 'package.json', 'package-lock.json', '.claude-plugin/plugin.json'])
 sh('git', ['commit', '-q', '-m', `lantern ${version}`])
 sh('git', ['tag', '-a', `v${version}`, '-m', `lantern ${version}`])
 console.log(`lantern ${version}: committed and tagged v${version}\n\n${un!.body}\n`)

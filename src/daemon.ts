@@ -11,6 +11,7 @@ import type { Chrome } from './cdp.ts'
 import { frame } from './frame.ts'
 import { Page, SETTLE, type Reply } from './page.ts'
 import { buildId, paths } from './paths.ts'
+import { dailyCheck } from './update.ts'
 import { readConfig } from './config.ts'
 
 let root = ''
@@ -178,6 +179,7 @@ function handle(req: any): Promise<Reply> {
 /** Run the daemon for a project, in this process, until it stops. */
 export async function runDaemon(projectRoot: string) {
   root = projectRoot; P = paths(root); CONFIG = readConfig(root)
+  void dailyCheck(P.home, log, CONFIG.update !== false) // once a day, in the background: is there a newer lantern? (then it installs itself)
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('uncaughtException', (e) => { console.error('uncaught:', e) })

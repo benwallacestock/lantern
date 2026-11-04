@@ -11,11 +11,11 @@ import { findChrome, NO_CHROME } from '../src/chrome.ts'
 import { runDaemon } from '../src/daemon.ts'
 import { buildId, paths } from '../src/paths.ts'
 import { USAGE } from '../src/usage.ts'
+import { installSkills, skillsStatus, updateHint, updateNow, version } from '../src/update.ts'
 
 // This file is the whole program: the CLI, and — started by the CLI as `lantern __daemon <root>` — the daemon. It runs
 // as TypeScript from a checkout (Node strips the types) and as one bundled file, dist/lantern.js, from npm.
 const here = fileURLToPath(import.meta.url)
-const PACKAGE = path.join(path.dirname(here), '..', 'package.json')
 
 type Reply = { ok: boolean; text: string }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -77,7 +77,7 @@ async function retireOld() {
   if (was === buildId()) return
   let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}
   if (!pid || !alive(pid)) return // nothing running; a running daemon with no build file (from before this check existed) is old too
-  process.stderr.write('lantern was updated; restarting its browser\n')
+  process.stderr.write(`lantern was updated to ${version()}; restarting its browser\n`)
   await connect({ cmd: 'close' })
   for (let i = 0; i < 40 && pid && alive(pid); i++) await sleep(250)
 }
@@ -110,7 +110,13 @@ async function main() {
     if (!rest.includes('--no-open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [r.text], { detached: true, stdio: 'ignore' }).unref() } catch {} }
     process.exit(0)
   }
-  if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${JSON.parse(fs.readFileSync(PACKAGE, 'utf8')).version}`); return }
+  if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${version()}${updateHint(P.home)}`); return }
+  if (cmd === 'update') { const r = await updateNow(P.home); if (!r.ok) die(r.text); console.log(r.text); return }
+  if (cmd === 'skills') {
+    if (rest[0] === 'install') { console.log(installSkills()); return }
+    if (!rest[0] || rest[0] === 'status') { console.log(skillsStatus()); return }
+    die('usage: lantern skills [install|status]')
+  }
   if (cmd === 'status' || cmd === 'close') {
     if (!fs.existsSync(P.sock)) {
       let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}

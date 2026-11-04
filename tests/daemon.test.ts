@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
 import { execFile } from 'node:child_process'
+import http from 'node:http'
+import net from 'node:net'
 import os from 'node:os'
 import { BIN, duration, firstLine, pause, pngSize, probe, setup, sh, type Run } from './helpers.ts'
 
@@ -106,11 +108,38 @@ test('an updated lantern restarts the daemon of the old one, page and all', asyn
     const build = fs.readdirSync(path.join(home, 'run')).find((f) => f.endsWith('.build') && fs.readFileSync(path.join(home, 'run', f), 'utf8') === fs.readFileSync(path.join(home, 'run', f), 'utf8') && fs.existsSync(path.join(home, 'run', f.replace('.build', '.pid'))) && Number(fs.readFileSync(path.join(home, 'run', f.replace('.build', '.pid')), 'utf8')) === before)!
     fs.writeFileSync(path.join(home, 'run', build), '0.0.1@1') // as if that daemon came from an earlier install
     const s = await run('status'); assert.ok(s.ok, s.out)
-    assert.match(s.out, /lantern was updated; restarting its browser/)
+    assert.match(s.out, /lantern was updated to \d+\.\d+\.\d+; restarting its browser/)
     const after = Number(/pid (\d+)/.exec(s.out)?.[1]); assert.ok(after && after !== before, `a new daemon (${before} → ${after})`)
     const t = await run('text'); assert.ok(t.ok, t.out) // the page it had comes back with the next command that needs one
     const again = await run('status'); assert.match(again.out, /\/about/); assert.doesNotMatch(again.out, /restarting/)
   } finally { await run('close'); fs.rmSync(proj2, { recursive: true, force: true }) }
+})
+
+test('skills install links the package skills where Claude and Codex read them', async () => {
+  const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-userhome-')); fs.mkdirSync(path.join(fakeHome, '.codex'))
+  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj, env: { ...process.env, LANTERN_HOME: home, HOME: fakeHome, USERPROFILE: fakeHome }, timeout: 30_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  try {
+    const r = await run('skills', 'install'); assert.ok(r.ok, r.out)
+    assert.match(r.out, /Claude Code: lantern, lantern-demo-video, lantern-verify linked into/); assert.match(r.out, /Codex: /)
+    for (const agent of ['.claude', '.codex']) for (const n of ['lantern', 'lantern-demo-video', 'lantern-verify']) {
+      const link = path.join(fakeHome, agent, 'skills', n); assert.ok(fs.lstatSync(link).isSymbolicLink(), `${link} is a link`); assert.ok(fs.existsSync(path.join(link, 'SKILL.md')), `${link} resolves`)
+    }
+    assert.match((await run('skills')).out, /lantern → this lantern/)
+    const again = await run('skills', 'install'); assert.ok(again.ok, 'installing twice is fine: ' + again.out)
+  } finally { fs.rmSync(fakeHome, { recursive: true, force: true }) }
+})
+
+test('update: asks the registry, says what is out, and does not touch a checkout', async () => {
+  // A registry of our own that says 9.9.9 is the latest.
+  const reg = http.createServer((_q, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ version: '9.9.9' })) })
+  await new Promise<void>((r) => reg.listen(0, '127.0.0.1', r))
+  const url = `http://127.0.0.1:${(reg.address() as net.AddressInfo).port}`
+  try {
+    const r = await lanternWith({ LANTERN_REGISTRY: url }, 'update'); assert.ok(r.ok, r.out)
+    assert.match(r.out, /lantern 9\.9\.9 is out \(this is \d+\.\d+\.\d+\)\. This copy is not a global npm install/)
+    assert.match((await lanternWith({ LANTERN_REGISTRY: url }, 'version')).out, /^lantern \d+\.\d+\.\d+ — 9\.9\.9 is out: `lantern update`$/)
+    const down = await lanternWith({ LANTERN_REGISTRY: 'http://127.0.0.1:9' }, 'update'); assert.ok(!down.ok); assert.match(down.out, /could not reach npm/)
+  } finally { reg.close() }
 })
 
 test('watch over the socket: JSON lines with frames and actions', async () => {

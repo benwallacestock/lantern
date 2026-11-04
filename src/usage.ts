@@ -1,7 +1,7 @@
 export const USAGE = `lantern — a browser for coding agents: drive the app, take pictures a reviewer can use, record a demo
 
   lantern open <url|path>       go to a page (a full URL the first time; then paths resolve against it)
-  lantern version               which lantern this is
+  lantern version               which lantern this is (and whether a newer one is out)
   lantern snapshot              what is on the page that you can act on, each with a ref like e12
   lantern text [selector]       the page's visible text (or one element's)
   lantern click <target>        target: a ref (e12), text=Exact label, a CSS selector, or x,y in viewport pixels (a canvas)
@@ -33,8 +33,11 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
 
   lantern watch               a live view of the page in your own browser (prints a URL and opens it; --no-open to just print)
   lantern status · close      is lantern up for this project; close its browser (it closes itself 30 minutes after the last command)
+  lantern update              install the latest lantern now (a global npm install checks once a day and updates itself)
+  lantern skills install      link the skills in this package into ~/.claude/skills (and Codex's), so they follow every update
 
 Pictures, videos and downloads go in <project>/tmp/lantern. Needs a Chrome (or LANTERN_CHROME=…); ffmpeg is optional for video.
 Settings, in the environment or a .lantern.json at the project root: url (where paths resolve), hosts (the only hosts
 the page may visit), out (where pictures go), note and footer (for the frame), accent (the colour of what lantern draws),
-watermark (false to drop the banner from videos and "made with lantern" from frames), onLoad (JavaScript to run after each load).`
+watermark (false to drop the banner from videos and "made with lantern" from frames), onLoad (JavaScript to run after each load),
+update (false to stop the daily check for a newer lantern).`
