@@ -285,14 +285,29 @@ export class Page {
     // Recording: the pointer glides and rests a moment before anything happens, so a viewer sees it travel and arrive — brisk,
     // since a demo is mostly routine clicks; captions and waits are where the viewer is given time.
     const glide = this.rec && opts.settle === undefined ? 350 : 250
+    const from = this.at
     this.at = { x, y }; this.fire(CURSOR_JS(x, y, glide))
-    await this.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: opts.buttons ? 'left' : 'none', buttons: opts.buttons ?? 0 })
+    const move = (mx: number, my: number) => this.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: mx, y: my, button: opts.buttons ? 'left' : 'none', buttons: opts.buttons ?? 0 })
+    // Recording: the page gets the moves along the way too, eased like the pointer on screen, so what follows the mouse
+    // (a line being drawn to it, a hover, a drag preview) is seen following it rather than jumping to where it lands.
+    if (this.rec && opts.settle === undefined && from) {
+      const dist = Math.hypot(x - from.x, y - from.y), n = Math.max(3, Math.min(14, Math.round(dist / 30)))
+      for (let i = 1; i < n; i++) { const t = i / n, e = 1 - Math.pow(1 - t, 3); await move(from.x + (x - from.x) * e, from.y + (y - from.y) * e); await sleep(glide / n) }
+    }
+    await move(x, y)
     await sleep(opts.settle ?? (this.rec ? 300 : 250)) // a beat so the pointer is seen arriving before the page reacts
   }
-  press(x: number, y: number, type: 'mousePressed' | 'mouseReleased', clickCount = 1, button: 'left' | 'right' = 'left') {
-    return this.cdp('Input.dispatchMouseEvent', { type, x, y, button, buttons: type === 'mousePressed' ? (button === 'right' ? 2 : 1) : 0, clickCount })
+  press(x: number, y: number, type: 'mousePressed' | 'mouseReleased', clickCount = 1, button: 'left' | 'right' = 'left', modifiers = 0) {
+    return this.cdp('Input.dispatchMouseEvent', { type, x, y, button, buttons: type === 'mousePressed' ? (button === 'right' ? 2 : 1) : 0, clickCount, modifiers })
   }
-  async click(target: string, times = 1, button: 'left' | 'right' = 'left'): Promise<Spot> {
+  /** --shift, --alt, --ctrl, --cmd ahead of a click's target, as Chrome's modifier bits; the flags are taken out of `rest`. */
+  static modifiers(rest: string[]): number {
+    const bits: Record<string, number> = { '--alt': 1, '--option': 1, '--ctrl': 2, '--control': 2, '--cmd': 4, '--meta': 4, '--shift': 8 }
+    let m = 0
+    while (rest[0] && bits[rest[0]] !== undefined) m |= bits[rest.shift()!]
+    return m
+  }
+  async click(target: string, times = 1, button: 'left' | 'right' = 'left', modifiers = 0): Promise<Spot> {
     let at = await this.spot(target)
     await this.moveMouse(at.x, at.y)
     // The pointer took a moment to arrive; if the element moved meanwhile (a scroll or a layout still settling), follow it.
@@ -305,7 +320,7 @@ export class Page {
       this.fire(CLICK_JS(at.x, at.y, color))
       this.hud(`mouse(${at.x}, ${at.y}, ${JSON.stringify(button)}, ${JSON.stringify(color)}, ${times})`)
     }
-    for (let n = 1; n <= times; n++) { await this.press(at.x, at.y, 'mousePressed', n, button); await this.press(at.x, at.y, 'mouseReleased', n, button) }
+    for (let n = 1; n <= times; n++) { await this.press(at.x, at.y, 'mousePressed', n, button, modifiers); await this.press(at.x, at.y, 'mouseReleased', n, button, modifiers) }
     if (this.rec) await sleep(250) // and the result on screen before the next step
     return at
   }
@@ -415,10 +430,11 @@ export class Page {
         return { ok: true, text: head + (text.length > 8000 ? `${text.slice(0, 8000)}\n… (${text.length - 8000} more characters; pass a selector to read one part)` : text || '(no text)') }
       }
       case 'click': {
+        const modifiers = Page.modifiers(rest) // click --shift e12: a modifier held (Shift to stop a canvas tool snapping, say)
         if (!rest[0]) return { ok: false, text: 'click what? a ref from the snapshot (e12), text=Label, or a CSS selector' }
         const before = await this.url()
         this.popups.length = 0; this.downloads.length = 0
-        const at = await this.click(rest.join(' '))
+        const at = await this.click(rest.join(' '), 1, 'left', modifiers)
         await sleep(500); await this.settle()
         if (this.pending.size) for (let i = 0; i < 100 && this.pending.size; i++) await sleep(200) // a download in flight: give it 20s
         const got = this.downloads.length ? `\ndownloaded ${this.downloads.map((d) => d).join(', ')}` : ''

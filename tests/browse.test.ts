@@ -190,6 +190,13 @@ test('a card below the fold of a smoothly scrolling drawer is clicked where it e
   assert.equal(await ok('text', '#picked2'), 'Card 3')
 })
 
+test('a modifier click: --shift, --alt, --ctrl, --cmd ahead of the target', async () => {
+  await ok('open', '/mods')
+  await ok('click', '#mod'); assert.equal(await ok('text', '#held'), 'none')
+  await ok('click', '--shift', '#mod'); assert.equal(await ok('text', '#held'), 'shift')
+  await ok('click', '--alt', '--cmd', 'text=Click me'); assert.equal(await ok('text', '#held'), 'alt+meta')
+})
+
 test('badge, ring, arrow and blur: drawn, following, cleared by kind or all at once', async () => {
   await ok('open', '/')
   assert.match(await ok('badge', '1', '#name'), /badge 1 on "Walk name"/)

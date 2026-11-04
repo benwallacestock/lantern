@@ -54,6 +54,16 @@ test('record without ffmpeg: Chrome encodes the video', async () => {
     if (p) { assert.match(p, /codec_name=(h264|vp9|vp8|av1)/); assert.ok(Number(/width=(\d+)/.exec(p)?.[1]) > 2880, `2x: ${p}`); assert.ok(duration(p) >= 4, `captions hold: ${duration(p)}s in ${p}`) }
   } finally { await lanternWith(NO, 'close'); await pause(300); await ok('open', app.url + '/') }
 })
+test('while recording, the page sees the pointer travel: moves along the way, not one jump', async () => {
+  await ok('open', '/moves'); await ok('click', '#a')
+  const before = Number(await ok('text', '#n'))
+  await ok('record', 'start'); await ok('click', '#b'); await ok('record', 'stop').catch(() => {})
+  const during = Number(await ok('text', '#n')) - before
+  assert.ok(during >= 4, `the page saw ${during} moves between the clicks`)
+  await ok('click', '#a'); const plain = Number(await ok('text', '#n'))
+  await ok('click', '#b'); assert.ok(Number(await ok('text', '#n')) - plain <= 3, 'not recording: one move, no glide')
+})
+
 test('a titled recording is framed: the video is bigger than the clip', async () => {
   await ok('open', '/')
   assert.match(await ok("record", "start", "--title", "A framed demo", "--note", "TRAIL-1"), /in a frame titled "A framed demo"/)

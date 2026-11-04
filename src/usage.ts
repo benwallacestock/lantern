@@ -4,7 +4,7 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern version               which lantern this is (and whether a newer one is out)
   lantern snapshot              what is on the page that you can act on, each with a ref like e12
   lantern text [selector]       the page's visible text (or one element's)
-  lantern click <target>        target: a ref (e12), text=Exact label, a CSS selector, or x,y in viewport pixels (a canvas)
+  lantern click <target>        target: a ref (e12), text=Exact label, a CSS selector, or x,y in viewport pixels (a canvas); --shift/--alt/--ctrl/--cmd first for a modifier click
   lantern dblclick <target> | rightclick <target> | hover <target>
   lantern drag <from> <to>      press at one target, carry to the other, let go (targets as for click)
   lantern scroll <down|up|left|right> [px] [at <target>]   or: scroll to <target> · scroll top · scroll bottom
