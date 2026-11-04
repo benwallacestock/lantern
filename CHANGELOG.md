@@ -2,6 +2,16 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.3.0 — 2026-11-04
+
+### Added
+- Every push to main is a release, with the version and notes from the commits
+  - Commit messages in the Conventional Commits shape decide the version (feat is a minor bump, fix and other changes a patch, docs/chore/ci/test make no release) and become the release notes, so nobody bumps a version or edits the changelog by hand
+  - `node scripts/release.ts auto --dry` shows what the next push would release
+  - The Claude plugin's version moves with each release, so plugin users get updates (it had stayed at 0.1.0)
+  - AGENTS.md, which CLAUDE.md imports, tells agents working in the repo how to write commits and what happens on push
+- Lantern keeps itself current, and `lantern skills install` links the skills so they follow
+
 ## 0.2.0 — 2026-11-04
 
 ### Fixed
