@@ -4,6 +4,8 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ## Unreleased
 
+## 0.2.0 — 2026-11-04
+
 ### Fixed
 - The daemon closes itself 30 minutes after the last command, whatever else is going on: a live view left open in a browser tab (or a recording nobody stopped) kept it and its Chrome alive all night. The live view now says when lantern has closed, keeps the last picture, and shows the first one straight away (it waited for the page to change).
 - After updating lantern, the next command restarts a daemon left from the earlier install (its page comes back), instead of driving the old code.
