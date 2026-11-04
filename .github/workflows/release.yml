@@ -1,17 +1,13 @@
-# A release, two ways. "Run workflow" here (or `gh workflow run release.yml -f version=0.2.1`): the tests run,
-# then scripts/release.ts moves the changelog, bumps the versions, commits and tags on main, and the run carries on
-# to the GitHub Release and npm. Or push a tag made by `npm run release -- <version>` on a laptop, and the run
-# starts from there. Either way the package goes to npm by trusted publishing, with provenance.
+# Every push to main is a release. The tests run; then scripts/release.ts reads the commits since the last tag,
+# decides the version from them (feat → minor, fix and other changes → patch, docs/chore/ci/test → no release),
+# writes the notes into CHANGELOG.md, bumps the versions, commits "lantern x.y.z", tags and pushes; then the GitHub
+# Release is published with those notes and the package goes to npm by trusted publishing, with provenance. The
+# release commit is pushed with the workflow's own token, so it does not start another run.
 name: Release
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'The version to release: 0.2.1, or patch | minor | major'
-        required: true
-        type: string
+    branches: [main]
+concurrency: release
 permissions:
   contents: write
   id-token: write
@@ -21,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          fetch-depth: 0 # the tags: the release script needs the last one
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -29,34 +25,29 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run typecheck
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
       - run: npm test
-      - name: Cut the release on main (Run workflow)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Version and notes from the commits; commit, tag, push
+        id: cut
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          npm run release -- "${{ inputs.version }}"
-      - name: Which release this is
-        run: |
-          V=$(node -p "require('./package.json').version")
-          if [ "${{ github.event_name }}" = "push" ]; then [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} but package.json says $V"; exit 1; }; fi
-          echo "REL=v$V" >> "$GITHUB_ENV"; echo "V=$V" >> "$GITHUB_ENV"; echo "releasing lantern $V"
-      - name: Release notes from CHANGELOG.md
-        run: node scripts/release.ts notes "$V" > notes.md && cat notes.md
+          node scripts/release.ts auto
       - name: GitHub Release
+        if: steps.cut.outputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.cut.outputs.version }}
         run: |
           PRE=""; case "$V" in 0.*) PRE="--prerelease";; esac
-          gh release create "$REL" --title "lantern $V" --notes-file notes.md $PRE
-      # To npm. With an NPM_TOKEN secret (an npm granular access token that may publish @benwallacestock/lantern) it publishes
-      # with that; without one it tries npm's trusted publishing, which works once the package on npmjs.com names
-      # this repository and workflow as its publisher. Either way the package carries provenance.
+          gh release create "v$V" --title "lantern $V" --notes-file notes.md $PRE
+      # To npm by trusted publishing: the package on npmjs.com names this repository and workflow as its publisher,
+      # so no token is needed and the package carries provenance. (An NPM_TOKEN secret would be used instead if set.)
       - name: Publish to npm
+        if: steps.cut.outputs.version != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          V: ${{ steps.cut.outputs.version }}
         run: |
-          V=$(node -p "require('./package.json').version")
-          if npm view "@benwallacestock/lantern@$V" version >/dev/null 2>&1; then echo "@benwallacestock/lantern@$V is already on npm (published by hand?): nothing to do"; exit 0; fi
-          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "no NPM_TOKEN secret: trying trusted publishing"; fi
+          if npm view "@benwallacestock/lantern@$V" version >/dev/null 2>&1; then echo "@benwallacestock/lantern@$V is already on npm: nothing to do"; exit 0; fi
           npm publish --provenance --access public
