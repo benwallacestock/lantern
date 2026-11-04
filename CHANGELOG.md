@@ -2,6 +2,21 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.6.0 — 2026-11-04
+
+### Added
+- Settings from four places, so nothing of lantern's has to be in the repository
+  - First wins: the environment (LANTERN_URL, LANTERN_ON_LOAD, …); `~/.lantern/projects/<hash>.json`, yours for the project and outside the repo, where a dev login with a password belongs; `.lantern.json` at the project root for a team that commits one; `~/.lantern/settings.json`, your defaults for every project
+  - `lantern settings` prints what is in force for the project and where each value came from, and where the files are
+  - The project hash is of the real path, so a symlinked checkout keys the same as its target
+- Named lanterns, so parallel agents on one project each get their own browser
+  - `LANTERN_NAME=review-2 lantern …` (or `lantern --name review-2 …`) is a lantern of its own on the same project: its own daemon, browser, login and `tmp/lantern/review-2/` for pictures; the unnamed one is unchanged
+  - `lantern status` lists the others on the project; `lantern watch --all` writes one page with every instance's live view side by side
+  - The lantern skill tells agents working in parallel to take names
+
+### Fixed
+- Skills: where a setting belongs — the environment for a one-off, lantern's own folder for this machine's (and any secret), the repo only for a team's committed url and hosts
+
 ## 0.5.1 — 2026-11-04
 
 ### Fixed
