@@ -15,7 +15,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 function html(req: VideoFrameReq): string {
   const accent = req.accent ?? ORANGE
-  const u = Math.max(0.5, req.innerW / 900) // type sized to the width, as for stills, so it reads the same wherever the video is shown
+  const u = Math.max(0.5, Math.max(req.innerW, req.innerH) / 900) // type sized to the longer side, as for stills, so it reads the same wherever the video is shown
   return `<!doctype html><meta charset="utf-8"><style>${frameCss(u, accent, false)}
     h1 { max-width: ${req.innerW}px; }
     .hole { width: ${req.innerW}px; height: ${req.innerH}px; background: transparent; }
