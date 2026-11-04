@@ -2,6 +2,18 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.4.3 — 2026-11-04
+
+### Fixed
+- A page that stops taking input is caught and the browser restarted, and six more things a user's agent ran into
+  - The deaf page: lantern now checks that input arrives after any navigation (open, reload, back), at `record start`, when a recording ends with nothing, and when Chrome never answers an input event; a dead page gets the browser restarted (a recording in flight is abandoned and said so) instead of clicks printing success into the void
+  - `click` waits for the element's box to stop moving after scrolling it into view, so a smooth scroll or a layout animation no longer gets a click aimed at where the card was
+  - Two callouts keep off each other's labels
+  - `frame --out name.png` with a bare name lands in the pictures folder, not the project root
+  - `branch: false` (or LANTERN_BRANCH=off) keeps the branch name out of the footer and banner, for a branch named after something that must not reach a PR; the skill says so
+  - The skills say `gh --attach` needs gh 2.99+ (it said 2.80+) and what to do with an older gh
+  - "Nothing was recorded" says what to try when the actions printed success
+
 ## 0.4.2 — 2026-11-04
 
 ### Fixed
