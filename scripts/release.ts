@@ -15,7 +15,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-export type Commit = { subject: string; body: string }
+export type Commit = { subject: string; body: string; hash?: string }
 export type Kind = 'major' | 'minor' | 'patch' | null
 
 const SKIP = new Set(['docs', 'chore', 'ci', 'test', 'tests', 'style', 'build', 'changelog', 'release'])
@@ -73,8 +73,8 @@ function section(log: string, heading: RegExp): { body: string; start: number; e
 /** The commits since the last release tag (all of them, when there is none). */
 function commitsSinceLastTag(): { since: string; commits: Commit[] } {
   let since = ''; try { since = sh('git', ['describe', '--tags', '--abbrev=0', '--match', 'v*']) } catch {}
-  const raw = sh('git', ['log', since ? `${since}..HEAD` : 'HEAD', '--no-merges', '--format=%s%x1f%b%x1e'])
-  const commits = raw.split('\x1e').map((r) => r.trim()).filter(Boolean).map((r) => { const [subject, body = ''] = r.split('\x1f'); return { subject: subject.trim(), body } })
+  const raw = sh('git', ['log', since ? `${since}..HEAD` : 'HEAD', '--no-merges', '--format=%H%x1f%s%x1f%b%x1e'])
+  const commits = raw.split('\x1e').map((r) => r.trim()).filter(Boolean).map((r) => { const [hash, subject, body = ''] = r.split('\x1f'); return { hash, subject: subject.trim(), body } })
   return { since, commits }
 }
 
@@ -99,8 +99,23 @@ function main() {
   if (!dry && sh('git', ['rev-parse', '--abbrev-ref', 'HEAD']) !== 'main') die('release from main')
   const current = String(JSON.parse(fs.readFileSync('package.json', 'utf8')).version)
   const { since, commits } = commitsSinceLastTag()
-  const version = cmd === 'auto' ? bump(current, commits) : /^\d+\.\d+\.\d+$/.test(cmd) ? cmd : die(`not a version: ${cmd}`)
   const out = (k: string, v: string) => { if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${k}=${v}\n`) }
+  // A release commit with no tag (a run that fell over between the commit and the tag, as in a GitHub outage):
+  // finish that release rather than cut another on top of it.
+  const half = commits.find((c) => /^lantern \d+\.\d+\.\d+$/.test(c.subject))
+  if (half && cmd === 'auto') {
+    const v = half.subject.slice('lantern '.length)
+    const s = section(log, new RegExp(`^## ${v.replace(/\./g, '\\.')}\\b`))
+    if (!s) die(`${half.subject} is committed but ${CHANGELOG} has no section for ${v}`)
+    console.log(`finishing lantern ${v}: it was committed (${half.hash?.slice(0, 7)}) but never tagged`)
+    if (dry) { console.log('(dry run: nothing written)'); return }
+    fs.writeFileSync('notes.md', s!.body + '\n')
+    sh('git', ['tag', '-a', `v${v}`, '-m', `lantern ${v}`, half.hash!])
+    sh('git', ['push', '-q', 'origin', `v${v}`])
+    out('version', v)
+    console.log(`tagged v${v} and pushed`); return
+  }
+  const version = cmd === 'auto' ? bump(current, commits) : /^\d+\.\d+\.\d+$/.test(cmd) ? cmd : die(`not a version: ${cmd}`)
   if (!version) { console.log(`nothing to release: ${commits.length} commit(s) since ${since || 'the start'}, none of them feat/fix or a change to the program`); out('version', ''); return }
   if (new RegExp(`^## ${version.replace(/\./g, '\\.')}\\b`, 'm').test(log)) die(`${version} is already in ${CHANGELOG}`)
   const body = notes(commits)
