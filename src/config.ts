@@ -6,7 +6,7 @@
 //   out     where pictures and videos go, relative to the project root: "tmp/lantern"
 //   note    a word for the frame's footer — a ticket, say: "SPR-123"
 //   onLoad  JavaScript to run in the page after every load — a dev login, say
-//   watermark  false to leave the "made with lantern" mark off recordings
+//   watermark  false to leave the banner off videos and "made with lantern" out of a frame's footer
 //   footer  the frame's footer, in place of "lantern · note · branch · time"
 //   accent  the colour of highlights, click rings and the frame's glyph: "#ff7a2f"
 import fs from 'node:fs'

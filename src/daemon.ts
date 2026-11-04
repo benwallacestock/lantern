@@ -60,7 +60,7 @@ async function dispatch(req: any): Promise<Reply> {
   switch (req.cmd) {
     case 'status': return { ok: true, text: `lantern is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}` }
     case 'close': await stop('asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
-    case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, ...req }, P.out)
+    case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, mark: CONFIG.watermark !== false, ...req }, P.out)
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
     case 'browser': {
       const p = await thePage()

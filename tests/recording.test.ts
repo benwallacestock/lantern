@@ -19,7 +19,6 @@ test('record a demo', async () => {
   assert.match(await ok('record', 'start'), /recording at 1440×900/)
   assert.match(await bad('record', 'start'), /already recording/)
   assert.match(await bad('size', 'phone'), /fixed while recording/)
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_mark")'), 'true', 'the mark is on while recording')
   await ok('record', 'caption', 'Name the room')
   await ok('fill', '#name', 'Demo walk')
   assert.equal(await ok('eval', '!!document.getElementById("__lantern_keys")'), 'true', 'typing is shown in a bubble by the pointer')
@@ -32,9 +31,8 @@ test('record a demo', async () => {
   assert.match(out, /\(\d+\.\d+s of video, from \d+ frames/)
   assert.ok(fs.statSync(f).size > 20_000, 'the video has something in it')
   const p = await probe(f)
-  if (p) { assert.match(p, /width=1920/); assert.match(p, /height=1200/); assert.ok(duration(p) >= 7.5, `captions hold: ${duration(p)}s`) } // three caption segments × 2.5s at least
+  if (p) { const w = Number(/width=(\d+)/.exec(p)?.[1]), h = Number(/height=(\d+)/.exec(p)?.[1]); assert.ok(w > 2880 && h > 1800, `the clip at 2x in its banner: ${w}×${h}`); assert.ok(duration(p) >= 7.5, `captions hold: ${duration(p)}s`) } // three caption segments × 2.5s at least
   assert.ok(!fs.existsSync(path.dirname(f) + '/' + path.basename(f, '.mp4').replace('demo-', 'rec-')), 'frames folder removed')
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_mark")'), 'false', 'the mark goes with the recording')
   assert.match(await bad('record', 'stop'), /not recording/)
   assert.match(await bad('record', 'caption', 'x'), /not recording/)
 })
@@ -53,7 +51,7 @@ test('record without ffmpeg: Chrome encodes the video', async () => {
     assert.match(r.out, /encoded by Chrome/)
     assert.ok(fs.statSync(f).size > 20_000, 'the video has something in it')
     const p = await probe(f)
-    if (p) { assert.match(p, /codec_name=(h264|vp9|vp8|av1)/); assert.match(p, /width=1920/); assert.ok(duration(p) >= 4, `captions hold: ${duration(p)}s in ${p}`) }
+    if (p) { assert.match(p, /codec_name=(h264|vp9|vp8|av1)/); assert.ok(Number(/width=(\d+)/.exec(p)?.[1]) > 2880, `2x: ${p}`); assert.ok(duration(p) >= 4, `captions hold: ${duration(p)}s in ${p}`) }
   } finally { await lanternWith(NO, 'close'); await pause(300); await ok('open', app.url + '/') }
 })
 test('a titled recording is framed: the video is bigger than the clip', async () => {
@@ -62,7 +60,7 @@ test('a titled recording is framed: the video is bigger than the clip', async ()
   await ok('record', 'caption', 'Estimate'); await ok('click', 'text=Estimate time'); await ok('callout', '#result', 'The estimate'); await ok('wait', '400')
   const out = await ok('record', 'stop'); const f = firstLine(out); assert.match(out, /; framed/); assert.ok(fs.existsSync(f))
   const p = await probe(f)
-  if (p) { const w = Number(/width=(\d+)/.exec(p)?.[1]), h = Number(/height=(\d+)/.exec(p)?.[1]); assert.ok(w > 1920 && h > 1200, `framed video is ${w}×${h}`) }
+  if (p) { const w = Number(/width=(\d+)/.exec(p)?.[1]), h = Number(/height=(\d+)/.exec(p)?.[1]); assert.ok(w > 2880 && h > 1800 + 100, `framed video is taller than one with just the banner: ${w}×${h}`) }
   assert.match(await bad('record', 'start', '--bogus'), /takes --title/)
 })
 test('nothing recorded when nothing changes', async () => {

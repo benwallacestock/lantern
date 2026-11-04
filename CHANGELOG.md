@@ -20,7 +20,7 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 - A `lantern-verify` skill: how to check a change works and matches its design, and leave evidence in the pull request.
 
 ### Changed
-- Recordings play at 24 frames a second and keep every frame Chrome paints; only actions keep a recording rolling, so an agent's reads between steps (`snapshot`, `text`) no longer record as pauses; `scroll to` scrolls visibly, with the wheel pill; a small "made with lantern" sits in the corner of a video (`watermark: false` to drop it).
+- Recordings play at 24 frames a second and keep every frame Chrome paints; only actions keep a recording rolling, so an agent's reads between steps (`snapshot`, `text`) no longer record as pauses; `scroll to` scrolls visibly, with the wheel pill; every video sits in a dark banner that says lantern, the branch and the time, with "made with lantern" at its right (`watermark: false` to drop it; the still frame's footer carries the same); a title adds the bar above. Videos keep the 2x pixels Chrome painted (2880 wide for the default size) instead of being scaled to 1920, so text stays crisp.
 - The live view streams a lighter 1x picture at up to 25 frames a second while only watching (full quality when recording), drops frames for a slow viewer rather than lagging, and wears lantern's name and glyph.
 - The frame's title carries the lantern glyph instead of a dot; `--footer` (or the `footer` setting) replaces the footer; the `accent` setting recolours everything lantern draws.
 

@@ -12,10 +12,10 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
-import { ACCENT_JS, BLUE, CALLOUT_JS, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, MARK_JS, ORANGE, HIGHLIGHT_JS, WITHOUT_OVERLAYS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { ACCENT_JS, BLUE, CALLOUT_JS, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, ORANGE, HIGHLIGHT_JS, WITHOUT_OVERLAYS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { USAGE } from './usage.ts'
 import { encodeInChrome } from './encode.ts'
-import { videoFrame } from './videoFrame.ts'
+import { FRAME_BG, videoFrame } from './videoFrame.ts'
 import { hostAllowed, type Config } from './config.ts'
 
 export type Reply = { ok: boolean; text: string }
@@ -45,7 +45,7 @@ const PICKED = new Set(['date', 'time', 'datetime-local', 'month', 'week', 'rang
 
 export const ffmpegBin = () => process.env.LANTERN_FFMPEG || [process.env.HOME + '/.local/bin/ffmpeg', '/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg'].find((f) => fs.existsSync(f)) || 'ffmpeg'
 const hasFfmpeg = () => new Promise<boolean>((res) => execFile(ffmpegBin(), ['-version'], (e) => res(!e)))
-const tryOut = (bin: string, args: string[]) => new Promise<string>((res) => execFile(bin, args, { maxBuffer: 1 << 24 }, (e, so, se) => res(String(se || so || (e ? e.message : '')))))
+const tryOut = (bin: string, args: string[]) => new Promise<{ ok: boolean; log: string }>((res) => execFile(bin, args, { maxBuffer: 1 << 24 }, (e, so, se) => res({ ok: !e, log: String(se || so || (e ? e.message : '')) })))
 
 export class Page {
   chrome: Chrome
@@ -193,7 +193,6 @@ export class Page {
   get accent() { return this.config.accent || ORANGE }
   private afterLoad() {
     if (this.config.accent) this.fire(ACCENT_JS(this.config.accent))
-    if (this.rec && this.config.watermark !== false) this.fire(MARK_JS(true)) // the "made with lantern" mark outlives a navigation
     if (this.rec?.caption) this.fire(CAPTION_JS(this.rec.caption)) // a caption outlives a navigation
     if (this.at) this.fire(CURSOR_JS(this.at.x, this.at.y)) // so does the pointer
     if (this.config.onLoad) this.fire(this.config.onLoad) // the project's own after-load script: a dev login, say
@@ -657,7 +656,6 @@ export class Page {
       await this.setSize(rw, rh)
       await sleep(400) // let the page lay out at that size before the first frame
       this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, ...opts }
-      if (this.config.watermark !== false) await this.evaluate(MARK_JS(true)).catch(() => {})
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
@@ -677,7 +675,7 @@ export class Page {
       this.rec = undefined
       this.hl = false
       this.co = false
-      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false) + ';' + CALLOUT_JS('') + ';' + MARK_JS(false)).catch(() => {})
+      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false) + ';' + CALLOUT_JS('')).catch(() => {})
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
@@ -698,21 +696,24 @@ export class Page {
       }
       const secs = durs.reduce((n, d) => n + d, 0)
       const base = path.join(this.outDir, `demo-${path.basename(r.dir).slice(4)}`)
-      // The clip's own size: at most 1920 wide, as before. With a title it sits in a frame, which is the video's size.
+      // The clip at the size it was captured (2x, so text stays crisp; at most 2880 wide). It sits in a frame — a
+      // banner below with "made with lantern", and the title above when there is one — which is the video's size.
       const { w: fw, h: fh } = jpegSize(fs.readFileSync(r.frames[0].file))
-      const innerW = Math.min(1920, fw) - (Math.min(1920, fw) % 2), innerH = Math.round((fh * innerW) / fw / 2) * 2
+      const innerW = Math.min(2880, fw) - (Math.min(2880, fw) % 2), innerH = Math.round((fh * innerW) / fw / 2) * 2
+      const mark = this.config.watermark !== false
       let frame: { png: Buffer; w: number; h: number; x: number; y: number } | undefined
-      if (r.title) { try { frame = await videoFrame(this.chrome, { innerW, innerH, title: r.title, note: r.note ?? this.config.note, branch: this.branch, footer: r.footer ?? this.config.footer, accent: this.config.accent }); fs.writeFileSync(path.join(r.dir, 'frame.png'), frame.png) } catch (e) { this.note(`could not draw the video's frame: ${(e as Error).message}`) } }
-      let out: string, how = frame ? '; framed' : ''
+      if (r.title || mark) { try { frame = await videoFrame(this.chrome, { innerW, innerH, title: r.title, mark, note: r.note ?? this.config.note, branch: this.branch, footer: r.footer ?? this.config.footer, accent: this.config.accent }); fs.writeFileSync(path.join(r.dir, 'frame.png'), frame.png) } catch (e) { this.note(`could not draw the video's frame: ${(e as Error).message}`) } }
+      let out: string, how = frame ? (r.title ? '; framed' : '; with a banner') : ''
       if (await hasFfmpeg()) {
         const list = r.frames.map((f, i) => `file '${f.file.replace(/'/g, "'\\''")}'\nduration ${durs[i].toFixed(3)}`).join('\n') + `\nfile '${r.frames[r.frames.length - 1].file}'\n`
         const listFile = path.join(r.dir, 'list.txt'); fs.writeFileSync(listFile, list)
         out = `${base}.mp4`
+        // The crop after the overlay: its first frame comes out a row taller (an ffmpeg quirk), and h264 needs even sizes.
         const args = frame
-          ? ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-i', path.join(r.dir, 'frame.png'), '-filter_complex', `[0:v]scale=${innerW}:${innerH}[clip];[1:v][clip]overlay=${frame.x}:${frame.y},format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
-          : ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', "scale='min(1920,iw)':-2,format=yuv420p", '-r', '24', '-movflags', '+faststart', out]
-        const log = await tryOut(ffmpegBin(), args)
-        if (!fs.existsSync(out)) return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.slice(-300)}` : ''} (frames kept in ${r.dir})` }
+          ? ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-i', path.join(r.dir, 'frame.png'), '-filter_complex', `[0:v]scale=${innerW}:${innerH},pad=${frame.w}:${frame.h}:${frame.x}:${frame.y}:color=${FRAME_BG}[clip];[clip][1:v]overlay=0:0,crop=${frame.w}:${frame.h}:0:0,format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
+          : ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', `scale=${innerW}:${innerH},format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
+        const { ok, log } = await tryOut(ffmpegBin(), args)
+        if (!ok || !fs.existsSync(out)) { console.error('ffmpeg failed:', args.join(' '), '\n', log.trim().slice(-1500)); fs.rmSync(out, { force: true }); return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.trim().slice(-400)}` : ''} (frames kept in ${r.dir})` } }
       } else {
         // No ffmpeg: Chrome encodes it, in real time — as long as the clip is.
         try { const enc = await encodeInChrome(this.chrome, r.frames.map((f) => f.file), durs, base, frame && { file: path.join(r.dir, 'frame.png'), w: frame.w, h: frame.h, x: frame.x, y: frame.y, innerW, innerH }); out = enc.file; how += `; encoded by Chrome as ${enc.mime.split(';')[0]} since ffmpeg is not installed — \`brew install ffmpeg\` for faster, smaller MP4s` }

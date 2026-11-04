@@ -34,4 +34,4 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
 Pictures, videos and downloads go in <project>/tmp/lantern. Needs a Chrome (or LANTERN_CHROME=…); ffmpeg is optional for video.
 Settings, in the environment or a .lantern.json at the project root: url (where paths resolve), hosts (the only hosts
 the page may visit), out (where pictures go), note and footer (for the frame), accent (the colour of what lantern draws),
-watermark (false to drop the "made with lantern" mark from videos), onLoad (JavaScript to run after each load).`
+watermark (false to drop the banner from videos and "made with lantern" from frames), onLoad (JavaScript to run after each load).`

@@ -11,7 +11,7 @@ import type { Chrome } from './cdp.ts'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 const page = (files: string[], durs: number[], frame?: { w: number; h: number; x: number; y: number; innerW: number; innerH: number }) => `<!doctype html><meta charset="utf-8"><title>lantern encoder</title><canvas id="c"></canvas><script>
-const FRAMES = ${JSON.stringify(files)}, DURS = ${JSON.stringify(durs)}, MAXW = 1920, FRAME = ${JSON.stringify(frame ?? null)}
+const FRAMES = ${JSON.stringify(files)}, DURS = ${JSON.stringify(durs)}, MAXW = 2880, FRAME = ${JSON.stringify(frame ?? null)}
 window.__status = 'loading'
 ;(async () => {
   try {
@@ -26,7 +26,7 @@ window.__status = 'loading'
     const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 })
     const chunks = []; rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
     const stopped = new Promise((res) => { rec.onstop = res })
-    const draw = (i) => { if (bg) { ctx.drawImage(bg, 0, 0); ctx.drawImage(imgs[i], FRAME.x, FRAME.y, FRAME.innerW, FRAME.innerH) } else ctx.drawImage(imgs[i], 0, 0, c.width, c.height); track.requestFrame() }
+    const draw = (i) => { if (bg) { ctx.fillStyle = '#15151a'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(imgs[i], FRAME.x, FRAME.y, FRAME.innerW, FRAME.innerH); ctx.drawImage(bg, 0, 0) } else ctx.drawImage(imgs[i], 0, 0, c.width, c.height); track.requestFrame() }
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     draw(0); rec.start(1000); window.__status = 'encoding'
     const t0 = performance.now(); let at = 0

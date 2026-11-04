@@ -51,7 +51,7 @@ export function launchChrome(bin: string, profile: string, log: number | 'inheri
   const prefs = path.join(profile, 'Default', 'Preferences')
   if (!fs.existsSync(prefs)) fs.writeFileSync(prefs, JSON.stringify({ credentials_enable_service: false, profile: { password_manager_enabled: false } }))
   return new Chrome(bin, [
-    '--headless=new',
+    '--headless=new', '--force-device-scale-factor=2',
     `--user-data-dir=${profile}`,
     '--no-first-run', '--no-default-browser-check', '--no-service-autorun',
     '--disable-background-networking', '--disable-component-update', '--disable-component-extensions-with-background-pages', '--disable-extensions', '--disable-default-apps', '--disable-sync',
