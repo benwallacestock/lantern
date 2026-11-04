@@ -7,7 +7,7 @@ description: Use the app you are working on in a real browser with the `lantern`
 
 `lantern` drives a real Chrome page for you, with no window. Each command is an ordinary shell command and prints what happened; the page stays open between commands, however long you take between them. Run it from anywhere inside the project: the browser is per project, and pictures go in `tmp/lantern/` at the project root (kept out of git for you).
 
-Check it is there with `lantern help`. If the command is not found, install it once with `npm install -g @benwallacestock/lantern` (needs Node 22.18+ and a Chrome on the machine) and then `lantern skills install`, or run it without installing as `npx -y @benwallacestock/lantern <command>` wherever this skill says `lantern`. An installed lantern keeps itself up to date; you never need to update it. If neither is possible, say so rather than reaching for another browser. ffmpeg is optional: videos are assembled faster with it, and by Chrome without it.
+Check it is there with `lantern help`. If the command is not found, install it once with `npm install -g @benwallacestock/lantern` (needs Node 22.18+ and a Chrome on the machine; it links these skills for next time), or run it without installing as `npx -y @benwallacestock/lantern <command>` wherever this skill says `lantern`. An installed lantern keeps itself up to date; you never need to update it. If neither is possible, say so rather than reaching for another browser. ffmpeg is optional: videos are assembled faster with it, and by Chrome without it.
 
 ## The loop
 

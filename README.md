@@ -28,27 +28,28 @@ Each command is a short-lived process. The first one starts a daemon for the pro
 
 ## Install
 
-Needs Node 22.18 or later and a Chrome (Google Chrome, Chromium, Edge or Brave; `LANTERN_CHROME=/path` to choose). ffmpeg is optional: with it, videos are assembled faster and come out smaller; without it, Chrome encodes them itself. 
+Needs Node 22.18+ and a Chrome (Google Chrome, Chromium, Edge or Brave). ffmpeg is optional: videos assemble faster and smaller with it.
 
 ```bash
 npm install -g @benwallacestock/lantern
-lantern skills install
 ```
 
-That is the whole setup. The first line is the CLI; the second links the skills that ship inside it (`lantern`, `lantern-demo-video`, `lantern-verify`) into `~/.claude/skills` for Claude Code and, when it is set up on the machine, into Codex's skills folder. From then on lantern keeps itself current: the daemon asks npm once a day whether there is a newer version and installs it in the background, the next command restarts the browser on the new one, and the linked skills are the new ones too, with nothing to run again. `lantern update` does it now; `LANTERN_UPDATE=off` (or `update: false` in `.lantern.json`) turns the daily check off. `lantern version` says whether a newer one is out.
+That installs the CLI and links its skills into `~/.claude/skills` (and into `~/.codex/skills` when Codex is set up). Open a new Claude Code or Codex session and ask it to look at, check, demo or screenshot something in your app. From then on lantern updates itself, skills included: it checks npm once a day and installs a newer version in the background.
 
-Without installing: `npx -y @benwallacestock/lantern <command>` wherever a skill says `lantern` (slower to start, and the skills then need `lantern skills install` again after each new version).
+- `lantern skills` shows where the links point; `lantern skills install` makes them again; `LANTERN_SKILLS=off` on the install skips them.
+- `lantern update` updates now; `LANTERN_UPDATE=off` (or `update: false` in `.lantern.json`) turns the daily check off; `lantern version` says when a newer one is out.
+- `LANTERN_CHROME=/path/to/chrome` picks the browser. Without installing: `npx -y @benwallacestock/lantern <command>`, slower to start.
 
-**Claude Code, as a plugin** — the same skills, if you would rather manage them with `/plugin`:
+**Claude Code plugin instead.** The same skills through `/plugin`, for a team that manages skills that way (pick one path, not both):
 
 ```
 /plugin marketplace add benwallacestock/lantern
 /plugin install lantern@lantern
 ```
 
-The plugin brings the skills only; the skill installs the CLI when it is missing. Plugins from a marketplace like this one update when you ask (`/plugin marketplace update lantern`) or when you turn on auto-update for the marketplace in `/plugin`.
+The plugin brings only the skills; the first time Claude needs the CLI, the skill has it run the install above. Plugins from a marketplace update when you ask (`/plugin marketplace update lantern`) or when auto-update is on for the marketplace in `/plugin`.
 
-**Any other agent** — put the text of `skills/lantern/SKILL.md` where the agent reads its instructions.
+**Any other agent.** Put the text of `skills/lantern/SKILL.md` where the agent reads its instructions.
 
 ## What it does
 
