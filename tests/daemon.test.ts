@@ -115,10 +115,12 @@ test('an updated lantern restarts the daemon of the old one, page and all', asyn
   } finally { await run('close'); fs.rmSync(proj2, { recursive: true, force: true }) }
 })
 
-test('skills install links the package skills where Claude and Codex read them', async () => {
+test('skills install links the package skills where Claude and Codex read them — run through a symlink, as an installed lantern is', async () => {
   const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-userhome-')); fs.mkdirSync(path.join(fakeHome, '.codex'))
-  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj, env: { ...process.env, LANTERN_HOME: home, HOME: fakeHome, USERPROFILE: fakeHome }, timeout: 30_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  const link = path.join(fakeHome, 'lantern'); fs.symlinkSync(BIN, link) // <prefix>/bin/lantern is a symlink to the bundle: the package must be found through it
+  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [link, ...args], { cwd: proj, env: { ...process.env, LANTERN_HOME: home, HOME: fakeHome, USERPROFILE: fakeHome }, timeout: 30_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
   try {
+    assert.match((await run('version')).out, /^lantern \d+\.\d+\.\d+/, 'the version is read through the symlink')
     const r = await run('skills', 'install'); assert.ok(r.ok, r.out)
     assert.match(r.out, /Claude Code: lantern, lantern-demo-video, lantern-verify linked into/); assert.match(r.out, /Codex: /)
     for (const agent of ['.claude', '.codex']) for (const n of ['lantern', 'lantern-demo-video', 'lantern-verify']) {

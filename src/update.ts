@@ -13,8 +13,10 @@ export const NAME = '@benwallacestock/lantern'
 const REGISTRY = () => process.env.LANTERN_REGISTRY || 'https://registry.npmjs.org'
 const DAY = 24 * 60 * 60_000
 
-/** Where this lantern lives: the package root (holding skills/ and package.json), from either entry file. */
-export const packageRoot = () => path.join(path.dirname(process.argv[1]), '..')
+/** Where this lantern lives: the package root (holding skills/ and package.json), from either entry file. The entry
+ * is reached through a symlink when installed (<prefix>/bin/lantern → …/node_modules/@benwallacestock/lantern/dist/lantern.js), so: the real path. */
+export const entryFile = () => { try { return fs.realpathSync(process.argv[1]) } catch { return process.argv[1] } }
+export const packageRoot = () => path.join(path.dirname(entryFile()), '..')
 export const version = () => { try { return String(JSON.parse(fs.readFileSync(path.join(packageRoot(), 'package.json'), 'utf8')).version) } catch { return '0.0.0' } }
 /** Installed with `npm install -g` (as opposed to run from a checkout, or by npx from its cache): the one kind we can update in place. */
 export const isGlobalInstall = () => { const p = packageRoot().split(path.sep).join('/'); return p.includes('/node_modules/' + NAME) && !p.includes('/_npx/') }

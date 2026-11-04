@@ -25,7 +25,7 @@ export function paths(root: string) {
 /** Which lantern this is: the version and when its entry file was written, so a daemon started by an earlier
  * install can be told apart from the CLI talking to it (the daemon keeps the code it started with). */
 export function buildId(): string {
-  const entry = process.argv[1]
+  let entry = process.argv[1]; try { entry = fs.realpathSync(entry) } catch {} // the installed command is a symlink to the bundle
   let version = '?', written = 0
   try { version = JSON.parse(fs.readFileSync(path.join(path.dirname(entry), '..', 'package.json'), 'utf8')).version } catch {}
   try { written = Math.round(fs.statSync(entry).mtimeMs) } catch {}
