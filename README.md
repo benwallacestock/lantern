@@ -87,7 +87,9 @@ Most projects need none. A `.lantern.json` at the project root, or the same keys
 - `src/daemon.ts` — one per project: owns the Chrome, the page, and a queue so commands never interleave.
 - `src/cdp.ts` — the DevTools protocol over Chrome's pipe. No dependencies.
 - `src/page.ts` — every command, and the recorder.
-- `src/pageScripts.ts` — what runs inside the page: the snapshot, locating targets, and the overlays (caption, pointer, highlight, keycaps, mouse).
+- `src/pageScripts.ts` — what runs inside the page to read it: the snapshot, locating targets, the focused element.
+- `src/overlay.ts` — what lantern draws in the page, in one runtime: the caption, the pointer, the click rings, the keys bubble, and the annotations (highlight, callout, badge, ring, arrow, blur) that follow their element.
+- `src/frameHtml.ts` — the look stills and videos share: the frame, the title, the footer with the mark.
 - `src/frame.ts` — the PR frame, rendered by Chrome itself.
 - `src/encode.ts` — the video, encoded by Chrome when there is no ffmpeg.
 - `src/videoFrame.ts` — the frame around a titled video.

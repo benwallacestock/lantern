@@ -168,13 +168,31 @@ test('shadow DOM: the snapshot lists what is inside, and targets reach it', asyn
 test('a callout: label, line and glow, numbered, following the element, off again', async () => {
   await ok('open', '/')
   const out = await ok('callout', '2', '#result', 'The time, once estimated'); assert.match(out, /callout 2 on "—": The time, once estimated/)
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div") && !!document.getElementById("__lantern_co_svg")'), 'true')
-  assert.match(await ok('eval', 'document.querySelectorAll("#__lantern_co_div")[1].textContent'), /2.*The time, once estimated/)
-  assert.match(await ok('eval', 'document.getElementById("__lantern_co_svg").querySelector("path").getAttribute("d")'), /^M[\d.]+ [\d.]+ Q/)
+  assert.equal(await ok('eval', '!!document.querySelector(".__l-callout") && !!document.querySelector(".__l-callout-line")'), 'true')
+  assert.match(await ok('eval', 'document.querySelector(".__l-callout-label").textContent'), /2.*The time, once estimated/)
+  assert.match(await ok('eval', 'document.querySelector(".__l-callout-line path").getAttribute("d")'), /^M[\d.]+ [\d.]+ Q/)
   await ok('click', 'text=Estimate time') // the element changes; the callout stays with it
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div")'), 'true')
-  await ok('callout', 'off'); assert.equal(await ok('eval', '!!document.getElementById("__lantern_co_div")'), 'false')
+  assert.equal(await ok('eval', '!!document.querySelector(".__l-callout")'), 'true')
+  await ok('callout', 'off'); assert.equal(await ok('eval', '!!document.querySelector(".__l-callout")'), 'false')
   assert.match(await bad('callout', '#result'), /needs the words/)
+})
+
+test('badge, ring, arrow and blur: drawn, following, cleared by kind or all at once', async () => {
+  await ok('open', '/')
+  assert.match(await ok('badge', '1', '#name'), /badge 1 on "Walk name"/)
+  assert.match(await ok('badge', '2', 'text=Estimate time'), /badge 2 on/)
+  assert.match(await ok('ring', '#fancy'), /a ring around/)
+  assert.match(await ok('arrow', '#result'), /an arrow pointing at/)
+  assert.match(await ok('blur', '#notes'), /a blur over/)
+  assert.equal(await ok('eval', '[".__l-badge", ".__l-ring", ".__l-arrow", ".__l-blur"].map((c) => document.querySelectorAll(c).length).join()'), '2,1,1,1')
+  assert.match(await ok('eval', 'document.querySelector(".__l-arrow path.shaft").getAttribute("d")'), /^M[-\d.]+ [-\d.]+ L/)
+  assert.equal(await ok('text'), (await ok('text')).replace(/\b1\b2\b/, ''), 'the badges are not in the page text') // reads hide the overlays
+  await ok('eval', 'document.getElementById("result").remove()') // the element goes; the arrow goes with it
+  await ok('wait', '200'); assert.equal(await ok('eval', 'document.querySelectorAll(".__l-arrow").length'), '0')
+  assert.match(await ok('clear', 'badge'), /badge annotations cleared/); assert.equal(await ok('eval', 'document.querySelectorAll(".__l-badge").length'), '0')
+  assert.match(await bad('clear', 'sparkles'), /clear what/)
+  assert.match(await ok('clear'), /annotations cleared/); assert.equal(await ok('eval', 'document.querySelectorAll(".__lantern:not(#__lantern_cursor)").length'), '0')
+  assert.match(await bad('badge', '#name'), /usage: lantern badge <n> <target>/)
 })
 test('a covered button is refused, not "clicked"', async () => {
   await ok('open', '/overlay')

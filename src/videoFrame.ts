@@ -19,7 +19,7 @@ function html(req: VideoFrameReq): string {
   return `<!doctype html><meta charset="utf-8"><style>${frameCss(u, accent, false)}
     h1 { max-width: ${req.innerW}px; }
     .hole { width: ${req.innerW}px; height: ${req.innerH}px; background: transparent; }
-  </style><body><div class="frame">${titleHtml(req.title, accent)}<div class="hole" id="hole"></div>${footHtml(req)}</div></body>`
+  </style><body><div class="frame">${titleHtml(req.title)}<div class="hole" id="hole"></div>${footHtml(req)}</div></body>`
 }
 
 export async function videoFrame(chrome: Chrome, req: VideoFrameReq): Promise<VideoFrame> {

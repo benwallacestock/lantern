@@ -32,15 +32,15 @@ test('screenshots: viewport, highlighted target, crop, region, full page, sizes'
 test('highlight follows and goes away', async () => {
   await ok('open', '/'); await ok('click', '#dd')
   assert.match(await ok('highlight', 'text=Boardwalk'), /highlighting "Boardwalk"/)
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_hl")'), 'true')
+  assert.equal(await ok('eval', '!!document.querySelector(".__l-highlight")'), 'true')
   await ok('click', 'text=Boardwalk') // the list is hidden; so is the box
   await ok('wait', '200')
-  assert.equal(await ok('eval', 'getComputedStyle(document.getElementById("__lantern_hl")).display'), 'none')
+  assert.equal(await ok('eval', 'getComputedStyle(document.querySelector(".__l-highlight")).display'), 'none')
   await ok('eval', 'document.getElementById("ddlist").remove()') // the element goes; the box goes with it
   await ok('wait', '200')
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_hl")'), 'false')
+  assert.equal(await ok('eval', '!!document.querySelector(".__l-highlight")'), 'false')
   await ok('highlight', '#result'); await ok('highlight', 'off')
-  assert.equal(await ok('eval', '!!document.getElementById("__lantern_hl")'), 'false')
+  assert.equal(await ok('eval', '!!document.querySelector(".__l-highlight")'), 'false')
 })
 test('frame: one picture, a pair, options', async () => {
   await ok('open', '/')

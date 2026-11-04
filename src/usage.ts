@@ -21,10 +21,13 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
                               --crop for just the element; --full for the whole page, however long or wide
   lantern highlight <target>    a glowing box around an element, in screenshots and recordings; highlight off ends it
   lantern callout <target> <words>   the words beside the element, joined to it by a line, the element lit; "callout 2 <target> <words>" numbers it; callout off ends it
+  lantern badge <n> <target>    a numbered disc on the element's corner: the steps of a still, in order
+  lantern ring <target> · arrow <target> · blur <target>   a ring around something small; a bold arrow pointing at it; the element blurred out (a name, a number)
+  lantern clear [kind]          every annotation off (or one kind: highlight, callout, badge, ring, arrow, blur); they follow their element and go when it does
   lantern frame <shot.png> [after.png …] --title "what it shows" [--captions "Before|After"] [--note "ABC-123"] [--footer "…"] [--out f.png] [--side|--stack]
                               one PNG, framed for a pull request: one picture, a before/after pair, or numbered steps
 
-  lantern record start [--title "what it shows"] [--note ABC-123] [--footer "…"]   start recording a demo; with a title the video gets a frame
+  lantern record start [--title "what it shows"] [--note ABC-123] [--footer "…"]   start recording a demo; the video sits in lantern's banner, with the title above when given
   lantern record caption <text> a line along the bottom of the video until the next caption (or caption off)
   lantern record stop           assemble the recording into an MP4 and print its path
 

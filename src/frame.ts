@@ -40,7 +40,7 @@ function html(req: FrameReq): string {
     figcaption:empty { display: none; }
     img { display: block; }
     .row.stack img { margin: 0 auto; } /* a small picture in a stacked pair sits in the middle, not at the left edge */
-  </style><body><div class="frame">${titleHtml(req.title, req.accent ?? ORANGE)}<div class="row${stack ? ' stack' : ''}">${panels}</div>${footHtml(req)}</div></body>`
+  </style><body><div class="frame">${titleHtml(req.title)}<div class="row${stack ? ' stack' : ''}">${panels}</div>${footHtml(req)}</div></body>`
 }
 
 export async function frame(chrome: Chrome, req: FrameReq, outDir: string): Promise<Reply> {

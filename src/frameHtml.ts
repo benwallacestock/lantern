@@ -7,13 +7,13 @@ export type Foot = { note?: string; branch?: string; footer?: string; accent?: s
 
 export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
-/** The lantern glyph, in the accent colour, for the title and the mark. */
+/** The lantern glyph, in the accent colour, for the mark. */
 export const GLYPH = (accent: string) => `<svg viewBox="0 0 256 256" aria-hidden="true"><path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="14" stroke-linecap="round"/><rect x="84" y="70" width="88" height="16" rx="6" fill="#e8e8ee"/><rect x="92" y="86" width="72" height="92" rx="12" fill="${accent}" stroke="#e8e8ee" stroke-width="12"/><path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="#fff1c2"/><rect x="84" y="178" width="88" height="16" rx="6" fill="#e8e8ee"/></svg>`
 
 export const when = () => new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-/** The title line, when there is one. */
-export const titleHtml = (title: string | undefined, accent: string) => (title ? `<h1>${GLYPH(accent)}${esc(title)}</h1>` : '')
+/** The title line, when there is one: just the words (the mark at the bottom right is the branding). */
+export const titleHtml = (title: string | undefined) => (title ? `<h1>${esc(title)}</h1>` : '')
 
 /** The footer: your own words, or lantern · note · branch · time; "made with lantern" at the right unless the mark is off. */
 export function footHtml(f: Foot): string {
@@ -32,7 +32,6 @@ export function frameCss(u: number, accent: string, rounded: boolean): string {
     body { display: inline-block; font-family: -apple-system, system-ui, sans-serif; color: #f2f2f4; }
     .frame { display: inline-flex; flex-direction: column; gap: calc(14px * var(--u)); padding: calc(28px * var(--u)) calc(32px * var(--u)) calc(22px * var(--u)); background: linear-gradient(160deg, #26262c, #15151a); ${rounded ? 'border-radius: calc(18px * var(--u));' : ''} }
     h1 { margin: 0; font-size: calc(18px * var(--u)); font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    h1 svg { width: calc(20px * var(--u)); height: calc(20px * var(--u)); vertical-align: -0.15em; margin-right: calc(10px * var(--u)); }
     /* width 0 + min-width 100%: the footer wraps to the pictures' width instead of widening the frame to fit itself */
     .foot { display: flex; flex-wrap: wrap; gap: 4px calc(12px * var(--u)); align-items: center; font-size: calc(10.5px * var(--u)); color: #a0a0aa; width: 0; min-width: 100%; }
     .foot b { color: ${accent}; }

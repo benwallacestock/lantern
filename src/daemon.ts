@@ -18,7 +18,7 @@ let P: ReturnType<typeof paths>
 let CONFIG: ReturnType<typeof readConfig>
 const IDLE = Number(process.env.LANTERN_IDLE_MS) || 30 * 60_000 // the env is for the tests
 /** Commands whose outcome a watcher is told about, in words. */
-const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'callout', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
+const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'callout', 'badge', 'ring', 'arrow', 'blur', 'clear', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
 /** Commands a recording keeps rolling for: things that happen on the page. A snapshot or a text read between
  * steps is the agent looking, not the user doing, and is cut from the video like any other thinking. */
 const RECORDS = new Set([...ACTS, 'record'])

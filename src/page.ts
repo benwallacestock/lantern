@@ -12,7 +12,8 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
-import { ACCENT_JS, BLUE, CALLOUT_JS, CAPTION_JS, CLICK_JS, CURSOR_JS, FOCUS_JS, FX_JS, ORANGE, HIGHLIGHT_JS, WITHOUT_OVERLAYS, HUD_JS, KEYS, KEY_GLYPH, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { BLUE, FOCUS_JS, KEYS, KEY_GLYPH, ORANGE, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
+import { ACCENT_JS, ANNOTATE_JS, ANNOTATIONS, CAPTION_JS, CLEAR_JS, CLICK_JS, CURSOR_JS, FX_JS, HUD_JS, REMOVE_JS, WITHOUT_OVERLAYS, type Annotation } from './overlay.ts'
 import { USAGE } from './usage.ts'
 import { encodeInChrome } from './encode.ts'
 import { FRAME_BG, videoFrame } from './videoFrame.ts'
@@ -125,7 +126,7 @@ export class Page {
   }
   /** Something drawn for the viewer: never in the way of the command itself. */
   fire(js: string) { void this.evaluate(js).catch(() => {}) }
-  hud(call: string) { this.fire(`${HUD_JS}; window.__lanternHud.${call}`) }
+  hud(call: string) { this.fire(HUD_JS(call)) }
   note(line: string) { this.log.push(`${new Date().toISOString().slice(11, 19)} ${line}`); if (this.log.length > 300) this.log.splice(0, this.log.length - 300) }
   private saveState() { if (!this.stateFile) return; try { fs.mkdirSync(path.dirname(this.stateFile), { recursive: true }); fs.writeFileSync(this.stateFile, JSON.stringify({ base: this.base, url: this.lastUrl })) } catch {} }
 
@@ -257,6 +258,13 @@ export class Page {
     const spot = again.error ? at : { ...again, name: at.name, matches: at.matches }
     if (spot.covered && !allowCovered) throw new Error(`"${spot.name}" is covered by ${spot.covered}, which would get the click instead — close what is in front of it, or scroll it clear`)
     return spot
+  }
+  /** The pointer rests where it last clicked — often on the very thing being shown. Step it out of the box. */
+  private async pointerClear(r: Rect) {
+    const c = this.at
+    if (!c || c.x < r.x - 12 || c.x > r.x + r.width + 12 || c.y < r.y - 12 || c.y > r.y + r.height + 12) return
+    const [w, h] = this.size
+    await this.moveMouse(r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), Math.min(h - 12, r.y + r.height + 36), { settle: 300 })
   }
   /** "3 elements read that": said when a text= target was ambiguous. */
   private several(at: Spot) { return at.matches && at.matches > 1 ? ` (${at.matches} elements read that; the first that looked pressable was used — a selector picks another)` : '' }
@@ -451,34 +459,54 @@ export class Page {
         const at = await this.click(rest.join(' '), 2); await sleep(300)
         return { ok: true, text: `double-clicked "${at.name}"` }
       }
+      // ---- annotations: drawn on the page, in screenshots and recordings, following their element until it goes or `clear`
       case 'highlight': {
         if (!rest[0]) return { ok: false, text: 'highlight what? a ref, text=Label, a selector — or off' }
-        if (rest[0] === 'off') { this.hl = false; await this.evaluate(HIGHLIGHT_JS(false)).catch(() => {}); return { ok: true, text: 'highlight off' } }
+        if (rest[0] === 'off') { this.hl = false; await this.evaluate(CLEAR_JS('highlight')).catch(() => {}); return { ok: true, text: 'highlight off' } }
         const { rect: r, name, matches } = await this.locate(rest.join(' '))
-        await this.evaluate(HIGHLIGHT_JS(true)).catch(() => {}); this.hl = true
-        // The pointer rests where it last clicked — often on the very thing being shown. Step it out of the box.
-        const c = this.at
-        if (c && c.x >= r.x - 12 && c.x <= r.x + r.width + 12 && c.y >= r.y - 12 && c.y <= r.y + r.height + 12) {
-          const [w, h] = this.size
-          const x = r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), y = Math.min(h - 12, r.y + r.height + 36)
-          await this.moveMouse(x, y, { settle: 300 })
-        }
+        await this.evaluate(ANNOTATE_JS('highlight')).catch(() => {}); this.hl = true
+        await this.pointerClear(r)
         return { ok: true, text: `highlighting "${name}"${this.several({ x: 0, y: 0, name, matches })} — it glows in screenshots and the recording, follows the element and goes when it does; \`lantern highlight off\` ends it` }
       }
       case 'callout': {
         // callout <target> <words> · callout 2 <target> <words> (numbered) · callout off
         if (!rest[0]) return { ok: false, text: 'callout what? `lantern callout <target> <words>` — or `callout off`' }
-        if (rest[0] === 'off') { this.co = false; await this.evaluate(CALLOUT_JS('')).catch(() => {}); return { ok: true, text: 'callout off' } }
+        if (rest[0] === 'off') { this.co = false; await this.evaluate(CLEAR_JS('callout')).catch(() => {}); return { ok: true, text: 'callout off' } }
         let n: number | undefined
         if (/^\d{1,2}$/.test(rest[0]) && rest.length > 2) { n = Number(rest.shift()) }
         if (rest.length < 2) return { ok: false, text: 'callout needs the words: `lantern callout <target> <what to say about it>`' }
         const { rect: r, name } = await this.locate(rest[0])
         const words = rest.slice(1).join(' ')
-        await this.evaluate(CALLOUT_JS(words, n)).catch(() => {}); this.co = true
-        // The pointer out of the way of what is being shown, as for a highlight.
-        const c = this.at
-        if (c && c.x >= r.x - 12 && c.x <= r.x + r.width + 12 && c.y >= r.y - 12 && c.y <= r.y + r.height + 12) { const [w, h] = this.size; await this.moveMouse(r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), Math.min(h - 12, r.y + r.height + 36), { settle: 300 }) }
+        await this.evaluate(ANNOTATE_JS('callout', { text: words, n })).catch(() => {}); this.co = true
+        await this.pointerClear(r)
         return { ok: true, text: `callout${n != null ? ` ${n}` : ''} on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
+      }
+      case 'badge': {
+        // badge <n> <target>: a numbered disc on the element's corner — the steps of a still, in order
+        if (rest.length < 2 || !/^\d{1,2}$/.test(rest[0])) return { ok: false, text: 'usage: lantern badge <n> <target> — a numbered disc on the element; `lantern clear badge` takes them off' }
+        const n = Number(rest[0])
+        const { rect: r, name, matches } = await this.locate(rest.slice(1).join(' '))
+        await this.evaluate(ANNOTATE_JS('badge', { n })).catch(() => {})
+        await this.pointerClear(r)
+        return { ok: true, text: `badge ${n} on "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear badge\` takes the badges off, \`lantern clear\` everything` }
+      }
+      case 'ring': case 'arrow': case 'blur': {
+        // ring <target>: a ring around something small (an icon, a toggle) · arrow <target>: a bold arrow pointing at it
+        // · blur <target>: the element blurred out, for a name or a number that must not be in the picture
+        if (!rest[0]) return { ok: false, text: `${sub} what? a ref, text=Label, a selector` }
+        const { rect: r, name, matches } = await this.locate(rest.join(' '))
+        await this.evaluate(ANNOTATE_JS(sub as Annotation)).catch(() => {})
+        await this.pointerClear(r)
+        const what = sub === 'ring' ? 'a ring around' : sub === 'arrow' ? 'an arrow pointing at' : 'a blur over'
+        return { ok: true, text: `${what} "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear ${sub}\` takes it off, \`lantern clear\` everything` }
+      }
+      case 'clear': {
+        const kind = rest[0] as Annotation | undefined
+        if (kind && !ANNOTATIONS.includes(kind)) return { ok: false, text: `clear what? one of ${ANNOTATIONS.join(', ')} — or nothing, for all of them` }
+        if (!kind || kind === 'highlight') this.hl = false
+        if (!kind || kind === 'callout') this.co = false
+        await this.evaluate(CLEAR_JS(kind)).catch(() => {})
+        return { ok: true, text: kind ? `${kind} annotations cleared` : 'annotations cleared' }
       }
       case 'hover': {
         if (!rest[0]) return { ok: false, text: 'hover what? a ref, text=Label, a selector, or x,y' }
@@ -675,7 +703,7 @@ export class Page {
       this.rec = undefined
       this.hl = false
       this.co = false
-      await this.evaluate(CAPTION_JS('') + ';' + HIGHLIGHT_JS(false) + ';' + CALLOUT_JS('')).catch(() => {})
+      await this.evaluate(CAPTION_JS('') + ';' + CLEAR_JS()).catch(() => {})
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
@@ -733,13 +761,13 @@ export class Page {
     const full = rest.includes('--full'); if (full) rest.splice(rest.indexOf('--full'), 1)
     const crop = rest.includes('--crop'); if (crop) rest.splice(rest.indexOf('--crop'), 1)
     const region = /^(\d+),(\d+),(\d+),(\d+)$/.exec(rest[0] ?? '')
-    let lit = false // a target without --crop: the whole viewport, the size under test, with the target glowing
+    let lit = 0 // a target without --crop: the whole viewport, the size under test, with the target glowing (the highlight's id, to take off after)
     // Chrome's clip is in page coordinates (from the top of the document), while rects and regions are in the viewport.
     const scrolled = await this.evaluate<{ x: number; y: number }>('({ x: scrollX, y: scrollY })')
     if (region) { clip = { x: +region[1] + scrolled.x, y: +region[2] + scrolled.y, width: +region[3], height: +region[4] }; what = ` — the region ${rest[0]}` }
     else if (rest[0] && !crop) {
       const { name, matches } = await this.locate(rest.join(' '))
-      await this.evaluate(HIGHLIGHT_JS(true)).catch(() => {}); await sleep(120); lit = true
+      lit = await this.evaluate<number>(ANNOTATE_JS('highlight')).catch(() => 0); await sleep(120)
       what = ` — "${name}" highlighted${this.several({ x: 0, y: 0, name, matches })}`
     } else if (rest[0]) {
       const { rect: r, name, scroll, matches } = await this.locate(rest.join(' '))
@@ -753,7 +781,7 @@ export class Page {
     const shot = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { ...clip, scale: 1 } } : {}), captureBeyondViewport: !!(full && !region) }, 20_000).catch(() => null)
     this.fire(FX_JS(false))
     if (this.at) void this.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: this.at.x, y: this.at.y }).catch(() => {}) // the picture must not end a hover
-    if (lit && !this.hl) this.fire(HIGHLIGHT_JS(false)) // only for the picture, unless `highlight` set it
+    if (lit) this.fire(REMOVE_JS(lit)) // only for the picture; a highlight the agent set stays
     if (!shot) return { ok: false, text: 'the page gave no picture (it may still be loading — try again)' }
     const buf = Buffer.from(shot.data, 'base64'), { w, h } = pngSize(buf)
     if (crop && h > w * 1.5) what += ' — a tall crop; for a PR picture, `screenshot <target>` without --crop gives the page with it highlighted'
