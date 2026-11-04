@@ -167,7 +167,7 @@ export class Page {
       case 'Page.frameStartedLoading': if (params.frameId === this.mainFrame) this.loading = true; break
       case 'Page.frameNavigated': if (!params.frame?.parentId) { this.mainFrame = params.frame.id; this.currentUrl = params.frame.url; this.navigated = true } break
       case 'Page.loadEventFired': this.loading = false; this.onLoad?.(); this.onLoad = undefined; this.afterLoad(); break
-      case 'Page.navigatedWithinDocument': this.loading = false; this.onLoad?.(); this.onLoad = undefined; break
+      case 'Page.navigatedWithinDocument': if (params.frameId === this.mainFrame && params.url) this.currentUrl = params.url; this.loading = false; this.onLoad?.(); this.onLoad = undefined; break // a pushState navigation (a single-page app's router) moves the URL too, and the watchers show it
       // Nobody is there to answer a dialog, and an unanswered one cancels whatever caused it (a navigation, say).
       case 'Page.javascriptDialogOpening': void this.cdp('Page.handleJavaScriptDialog', { accept: true }).catch(() => {}); this.note(params.type === 'beforeunload' ? 'beforeunload: the page asked before leaving; left anyway' : `${params.type}: ${String(params.message).slice(0, 300)} (accepted)`); break
       case 'Runtime.consoleAPICalled': if (params.type === 'warning' || params.type === 'error') this.note(`console.${params.type === 'warning' ? 'warn' : 'error'}: ${(params.args ?? []).map((a: any) => a.value ?? a.description ?? '').join(' ').slice(0, 500)}`); break
