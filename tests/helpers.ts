@@ -30,5 +30,7 @@ export const firstLine = (s: string) => s.split('\n')[0]
 export const sh = (cmd: string, args: string[]) => new Promise<string>((res) => execFile(cmd, args, (_e, so, se) => res(so + se)))
 /** What ffprobe says about a video, or null where ffprobe isn't installed (the file's existence and size are still checked). */
 export const probe = async (f: string): Promise<string | null> => { const out = await sh('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height,duration', '-show_entries', 'format=duration', '-of', 'default=nw=1', f]); return /ENOENT|not found/.test(out) ? null : out }
+/** The colour at x,y of frame n of a video, as [r, g, b] — or null without ffmpeg. */
+export const pixelAt = async (f: string, n: number, x: number, y: number): Promise<number[] | null> => new Promise((res) => execFile('ffmpeg', ['-v', 'error', '-i', f, '-vf', `select=eq(n\\,${n}),crop=1:1:${x}:${y}`, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { encoding: 'buffer', maxBuffer: 1 << 20 }, (e, so) => res(e || !so.length ? null : [...so.subarray(0, 3)])))
 export const duration = (p: string) => Math.max(...[...p.matchAll(/duration=([\d.]+)/g)].map((m) => Number(m[1])))
 export const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))

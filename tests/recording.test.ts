@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
-import { duration, firstLine, pause, pngSize, probe, setup, sh, type Run } from './helpers.ts'
+import { duration, firstLine, pause, pixelAt, pngSize, probe, setup, sh, type Run } from './helpers.ts'
 
 let t: Awaited<ReturnType<typeof setup>>
 let app: { url: string; close: () => void }, home = '', proj = ''
@@ -61,6 +61,8 @@ test('a titled recording is framed: the video is bigger than the clip', async ()
   const out = await ok('record', 'stop'); const f = firstLine(out); assert.match(out, /; framed/); assert.ok(fs.existsSync(f))
   const p = await probe(f)
   if (p) { const w = Number(/width=(\d+)/.exec(p)?.[1]), h = Number(/height=(\d+)/.exec(p)?.[1]); assert.ok(w > 2880 && h > 1800 + 100, `framed video is taller than one with just the banner: ${w}×${h}`) }
+  // The frame stays for the whole clip (it is a still laid over every frame, and once it went after the first one): a corner pixel well into the clip is the frame's dark, not the page's white.
+  const px = await pixelAt(f, 20, 6, 6); if (px) assert.ok(px.every((c) => c < 80), `frame corner at frame 20 is dark: ${px}`)
   assert.match(await bad('record', 'start', '--bogus'), /takes --title/)
 })
 test('nothing recorded when nothing changes', async () => {

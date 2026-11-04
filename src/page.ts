@@ -736,9 +736,11 @@ export class Page {
         const list = r.frames.map((f, i) => `file '${f.file.replace(/'/g, "'\\''")}'\nduration ${durs[i].toFixed(3)}`).join('\n') + `\nfile '${r.frames[r.frames.length - 1].file}'\n`
         const listFile = path.join(r.dir, 'list.txt'); fs.writeFileSync(listFile, list)
         out = `${base}.mp4`
+        // The frame is one still, looped (-loop 1) so the overlay keeps it for the whole clip rather than for its first
+        // frame; shortest=1 ends the output with the clip, since the loop never ends.
         // The crop after the overlay: its first frame comes out a row taller (an ffmpeg quirk), and h264 needs even sizes.
         const args = frame
-          ? ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-i', path.join(r.dir, 'frame.png'), '-filter_complex', `[0:v]scale=${innerW}:${innerH},pad=${frame.w}:${frame.h}:${frame.x}:${frame.y}:color=${FRAME_BG}[clip];[clip][1:v]overlay=0:0,crop=${frame.w}:${frame.h}:0:0,format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
+          ? ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-loop', '1', '-i', path.join(r.dir, 'frame.png'), '-filter_complex', `[0:v]scale=${innerW}:${innerH},pad=${frame.w}:${frame.h}:${frame.x}:${frame.y}:color=${FRAME_BG}[clip];[clip][1:v]overlay=0:0:shortest=1,crop=${frame.w}:${frame.h}:0:0,format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
           : ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-vf', `scale=${innerW}:${innerH},format=yuv420p`, '-r', '24', '-movflags', '+faststart', out]
         const { ok, log } = await tryOut(ffmpegBin(), args)
         if (!ok || !fs.existsSync(out)) { console.error('ffmpeg failed:', args.join(' '), '\n', log.trim().slice(-1500)); fs.rmSync(out, { force: true }); return { ok: false, text: `ffmpeg could not assemble the video${log ? `: ${log.trim().slice(-400)}` : ''} (frames kept in ${r.dir})` } }
