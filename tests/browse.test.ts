@@ -182,6 +182,14 @@ test('a callout: label, line and glow, numbered, following the element, off agai
   await ok('clear')
 })
 
+test('a card below the fold of a smoothly scrolling drawer is clicked where it ends up, not where it was', async () => {
+  await ok('open', '/smooth')
+  assert.match(await ok('click', 'text=Card 10'), /clicked "Card 10/)
+  assert.equal(await ok('text', '#picked2'), 'Card 10')
+  assert.match(await ok('click', 'text=Card 3'), /clicked "Card 3/)
+  assert.equal(await ok('text', '#picked2'), 'Card 3')
+})
+
 test('badge, ring, arrow and blur: drawn, following, cleared by kind or all at once', async () => {
   await ok('open', '/')
   assert.match(await ok('badge', '1', '#name'), /badge 1 on "Walk name"/)

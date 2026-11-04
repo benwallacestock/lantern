@@ -26,7 +26,7 @@ type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number;
 type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string }
 
 /** ms of recording after a command returns: the page reacting, a transition finishing. */
-export const SETTLE = 1500
+export const SETTLE = 900 // ms of frames kept after an action, for the page to settle on screen (the viewer sees the result; the agent's thinking after that is cut)
 const SCALE = 2
 const PRESETS: Record<string, [number, number]> = { phone: [390, 844], tablet: [1024, 768], laptop: [1280, 800], desktop: [1440, 900], wide: [1920, 1080] }
 const NAV = new Set(['open', 'reload', 'back']) // commands that navigate: the page is checked for input afterwards
@@ -256,13 +256,15 @@ export class Page {
     if (!scroll) return at
     // Let the scroll-into-view land before aiming: a smooth scroll or a layout animation moves the box for a while, and a
     // click aimed mid-way lands on whatever was passing. Wait until two readings agree.
+    // A smooth scroll takes a frame to start, so two early readings can agree before anything has moved: the readings
+    // that count are 100ms apart, from 150ms after the scroll was asked for.
     let again = at
-    for (let i = 0, last = at; i < 8; i++) {
-      await sleep(i ? 80 : 120)
+    for (let i = 0, last = at; i < 12; i++) {
+      await sleep(i ? 100 : 150)
       const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false))
       if (now.error) break
       again = now
-      if (Math.abs(now.x - last.x) < 1 && Math.abs(now.y - last.y) < 1 && i > 0) break
+      if (i > 0 && Math.abs(now.x - last.x) < 1 && Math.abs(now.y - last.y) < 1) break
       last = now
     }
     const spot = again === at ? at : { ...again, name: at.name, matches: at.matches }
@@ -280,25 +282,31 @@ export class Page {
   private several(at: Spot) { return at.matches && at.matches > 1 ? ` (${at.matches} elements read that; the first that looked pressable was used — a selector picks another)` : '' }
   /** Move the mouse there, for the recording's pointer and the page itself. */
   async moveMouse(x: number, y: number, opts: { buttons?: number; settle?: number } = {}) {
-    // Recording: the pointer glides for 600ms and rests before anything happens, so a viewer sees it travel and arrive.
-    const glide = this.rec && opts.settle === undefined ? 600 : 250
+    // Recording: the pointer glides and rests a moment before anything happens, so a viewer sees it travel and arrive — brisk,
+    // since a demo is mostly routine clicks; captions and waits are where the viewer is given time.
+    const glide = this.rec && opts.settle === undefined ? 350 : 250
     this.at = { x, y }; this.fire(CURSOR_JS(x, y, glide))
     await this.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: opts.buttons ? 'left' : 'none', buttons: opts.buttons ?? 0 })
-    await sleep(opts.settle ?? (this.rec ? 650 : 250)) // a beat so the pointer is seen arriving before the page reacts
+    await sleep(opts.settle ?? (this.rec ? 300 : 250)) // a beat so the pointer is seen arriving before the page reacts
   }
   press(x: number, y: number, type: 'mousePressed' | 'mouseReleased', clickCount = 1, button: 'left' | 'right' = 'left') {
     return this.cdp('Input.dispatchMouseEvent', { type, x, y, button, buttons: type === 'mousePressed' ? (button === 'right' ? 2 : 1) : 0, clickCount })
   }
   async click(target: string, times = 1, button: 'left' | 'right' = 'left'): Promise<Spot> {
-    const at = await this.spot(target)
+    let at = await this.spot(target)
     await this.moveMouse(at.x, at.y)
+    // The pointer took a moment to arrive; if the element moved meanwhile (a scroll or a layout still settling), follow it.
+    if (!/^-?\d+,-?\d+$/.test(target.trim())) {
+      const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false)).catch(() => null)
+      if (now && !now.error && (Math.abs(now.x - at.x) >= 1 || Math.abs(now.y - at.y) >= 1)) { at = { ...now, name: at.name, matches: at.matches }; await this.moveMouse(at.x, at.y, { settle: 120 }) }
+    }
     if (this.rec) { // the ring and the word, as the click lands
       const color = button === 'right' ? BLUE : this.accent
       this.fire(CLICK_JS(at.x, at.y, color))
       this.hud(`mouse(${at.x}, ${at.y}, ${JSON.stringify(button)}, ${JSON.stringify(color)}, ${times})`)
     }
     for (let n = 1; n <= times; n++) { await this.press(at.x, at.y, 'mousePressed', n, button); await this.press(at.x, at.y, 'mouseReleased', n, button) }
-    if (this.rec) await sleep(500) // and the result on screen before the next step
+    if (this.rec) await sleep(250) // and the result on screen before the next step
     return at
   }
   /** Type like a person: one key at a time, as real key events, at a human pace while recording and fast otherwise. */
@@ -734,7 +742,7 @@ export class Page {
         return { ok: false, text: 'nothing was recorded: the page never changed while recording (if the actions printed success and the app did not react, `lantern close` then `open`, and record again)' }
       }
       // Each frame shows until the next; a long gap (the agent thinking) is cut to a beat, so the clip is the interactions, not the waiting.
-      const GAP = 1.2, MIN = 1 / 30, HOLD = 2.5 // each frame shows for the time until the next: real time, never slowed
+      const GAP = 0.6, MIN = 1 / 30, HOLD = 2.5 // each frame shows for the time until the next: real time, never slowed; a gap (the agent thinking) is cut to a beat
       const durs = r.frames.map((f, i) => { const next = r.frames[i + 1]; return next ? Math.max(MIN, Math.min(GAP, (next.t - f.t) / 1000)) : 1.5 })
       // Every caption stays up for at least HOLD seconds: an agent that sets one and acts in the same breath leaves
       // nothing readable. The segment keeps its pace; its last frame holds for whatever time is missing.
