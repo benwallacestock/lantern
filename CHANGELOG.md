@@ -2,6 +2,12 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.3.1 — 2026-11-04
+
+### Fixed
+- An installed lantern finds its own package through the command's symlink
+  - `lantern version` said 0.0.0, `lantern skills` found no skills, and the daily self-update never saw a global install, because the package was looked for next to <prefix>/bin/lantern instead of the bundle it links to
+
 ## 0.3.0 — 2026-11-04
 
 ### Added
