@@ -97,7 +97,9 @@ export const UI_JS = String.raw`(() => {
       const ring = mk('div', '__l-ring')
       return { el, nodes: [ring], layout: (r) => { const pad = clamp(Math.min(r.width, r.height) * 0.3, 10, 28); place(ring, r.left - pad, r.top - pad, r.width + 2 * pad, r.height + 2 * pad) } }
     },
-    badge: (el, o) => { const b = mk('div', '__l-top __l-badge', esc(o.n)); return { el, nodes: [b], layout: (r) => place(b, r.left - 13, r.top - 13) } },
+    // A numbered disc just outside the element's top-left corner, so it covers none of the element's own words (a short
+    // button's label starts right at that corner); on the corner itself when there is no room outside.
+    badge: (el, o) => { const b = mk('div', '__l-top __l-badge', esc(o.n)); return { el, nodes: [b], layout: (r) => place(b, r.left >= 30 ? r.left - 28 : r.left - 13, r.top >= 30 ? r.top - 28 : r.top - 13) } },
     blur: (el) => { const b = mk('div', '__l-blur'); return { el, nodes: [b], layout: (r) => place(b, Math.round(r.left) - 2, Math.round(r.top) - 2, Math.round(r.width) + 4, Math.round(r.height) + 4) } },
     arrow: (el) => {
       // A bold arrow pointing at the element from the side with the most room, a white halo under it for contrast.
