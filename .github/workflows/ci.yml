@@ -20,7 +20,10 @@ jobs:
       - run: npm run typecheck
       # The runner has Google Chrome; ffmpeg is installed so both assembly paths are tested (the suite covers the
       # no-ffmpeg path itself by pointing LANTERN_FFMPEG nowhere).
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+      # Installing from apt can hang on the runner (a stuck mirror, a lock held by its own updater): a release run sat
+      # on this step for half an hour once. Five minutes is plenty when it works; otherwise fail and re-run.
+      - run: sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg > /dev/null
+        timeout-minutes: 5
       - run: google-chrome --version && ffmpeg -version > /dev/null && ffprobe -version > /dev/null
       - run: npm test
       # The way people get it: the packed tarball, installed into a prefix, run as the one bundled file.
