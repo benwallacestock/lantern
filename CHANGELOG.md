@@ -2,6 +2,13 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.4.4 — 2026-11-04
+
+### Fixed
+- Record: a brisk pace through routine clicks, and a click follows an element that is still scrolling into place
+  - A routine click is about two seconds of video (the pointer glides 350ms, rests 300ms, holds 250ms; frames keep for 900ms after an action; a thinking gap is cut to 0.6s) instead of four and a half; captions still hold 2.5s, and the demo skill says to caption and wait only for what the viewer should take in
+  - `click` waits for the target's box to be still from 150ms after scrolling it into view, and checks its position again once the pointer has arrived, so a card in a smoothly scrolling drawer is clicked where it ends up; the fixture has such a drawer and a test clicks through it
+
 ## 0.4.3 — 2026-11-04
 
 ### Fixed
