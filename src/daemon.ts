@@ -10,7 +10,7 @@ import { findChrome, launchChrome, NO_CHROME } from './chrome.ts'
 import type { Chrome } from './cdp.ts'
 import { frame } from './frame.ts'
 import { Page, SETTLE, type Reply } from './page.ts'
-import { buildId, paths } from './paths.ts'
+import { buildId, instances, paths } from './paths.ts'
 import { dailyCheck } from './update.ts'
 import { readConfig } from './config.ts'
 
@@ -59,7 +59,7 @@ function shutdown(why: string) { void stop(why).then(() => setTimeout(() => proc
 
 async function dispatch(req: any): Promise<Reply> {
   switch (req.cmd) {
-    case 'status': return { ok: true, text: `lantern is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}` }
+    case 'status': { const others = instances(root).filter((n) => n !== (P.name ?? '')); return { ok: true, text: `lantern${P.name ? ` "${P.name}"` : ''} is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}${others.length ? `\n  also on this project: ${others.map((n) => n || '(unnamed)').join(', ')} — \`lantern watch --all\` shows them side by side` : ''}` } }
     case 'close': await stop('asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
     case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, mark: CONFIG.watermark !== false, ...req, ...(CONFIG.branch === false ? { branch: undefined } : {}) }, P.out)
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
@@ -134,7 +134,7 @@ function previewUrl(): Promise<string> {
       req.on('close', () => { p.watchers.delete(w) })
     } else {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      const name = root.split('/').pop()
+      const name = root.split('/').pop() + (P.name ? ` · ${P.name}` : '')
       res.end(`<!doctype html><meta charset="utf-8"><title>lantern · ${name}</title>
 <style>
 html,body{margin:0;height:100%;background:#16161a;color:#e8e8ee;font:13px -apple-system,system-ui,sans-serif}
@@ -177,8 +177,8 @@ function handle(req: any): Promise<Reply> {
 }
 
 /** Run the daemon for a project, in this process, until it stops. */
-export async function runDaemon(projectRoot: string) {
-  root = projectRoot; P = paths(root); CONFIG = readConfig(root)
+export async function runDaemon(projectRoot: string, name?: string) {
+  root = projectRoot; P = paths(root, name); CONFIG = readConfig(root)
   void dailyCheck(P.home, log, CONFIG.update !== false) // once a day, in the background: is there a newer lantern? (then it installs itself)
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('SIGINT', () => shutdown('SIGINT'))

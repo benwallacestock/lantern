@@ -144,6 +144,19 @@ test('update: asks the registry, says what is out, and does not touch a checkout
   } finally { reg.close() }
 })
 
+test('named lanterns on one project: separate pages, pictures and status; watch --all shows them together', async () => {
+  const a = await lanternWith({ LANTERN_NAME: 'alpha' }, 'open', app.url + '/about'); assert.ok(a.ok, a.out)
+  const b = await lanternWith({ LANTERN_NAME: 'beta' }, 'open', app.url + '/long'); assert.ok(b.ok, b.out)
+  try {
+    assert.match((await lanternWith({ LANTERN_NAME: 'alpha' }, 'url')).out, /\/about/); assert.match((await lanternWith({ LANTERN_NAME: 'beta' }, 'url')).out, /\/long/)
+    assert.match((await lanternWith({}, '--name', 'beta', 'url')).out, /\/long/, '--name works like LANTERN_NAME')
+    const shot = firstLine((await lanternWith({ LANTERN_NAME: 'alpha' }, 'screenshot')).out); assert.ok(shot.includes(path.join('tmp', 'lantern', 'alpha') + path.sep), `pictures in the name's folder: ${shot}`)
+    const st = (await lanternWith({ LANTERN_NAME: 'alpha' }, 'status')).out; assert.match(st, /lantern "alpha" is up/); assert.match(st, /also on this project: .*beta/)
+    const all = (await lantern('watch', '--all')).out; const file = firstLine(all); assert.ok(fs.existsSync(file)); const html = fs.readFileSync(file, 'utf8')
+    assert.ok((html.match(/<iframe /g) || []).length >= 2, 'a live view for each named lantern (and the unnamed one when it is up)'); assert.match(all, /alpha: http:\/\/127\.0\.0\.1:\d+\//); assert.match(all, /beta: http/)
+  } finally { await lanternWith({ LANTERN_NAME: 'alpha' }, 'close'); await lanternWith({ LANTERN_NAME: 'beta' }, 'close') }
+})
+
 test('watch over the socket: JSON lines with frames and actions', async () => {
   const net = await import('node:net')
   const sock = path.join(home, 'run', fs.readdirSync(path.join(home, 'run')).find((f) => f.endsWith('.sock'))!)

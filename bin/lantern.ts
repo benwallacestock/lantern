@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findChrome, NO_CHROME } from '../src/chrome.ts'
 import { runDaemon } from '../src/daemon.ts'
-import { buildId, paths } from '../src/paths.ts'
+import { buildId, cleanName, instances, paths } from '../src/paths.ts'
 import { USAGE } from '../src/usage.ts'
 import { installSkills, skillsStatus, updateHint, updateNow, version } from '../src/update.ts'
 
@@ -22,14 +22,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const die = (msg: string): never => { process.stderr.write(msg + '\n'); process.exit(1) }
 
 const argv = process.argv.slice(2)
+// `lantern --name review-2 <command>` (or LANTERN_NAME=review-2): one of several lanterns on the same project, for parallel agents.
+let name = cleanName(process.env.LANTERN_NAME)
+if (argv[0] === '--name' || argv[0] === '-n') { name = cleanName(argv[1]); argv.splice(0, 2) }
+else if (/^--name=/.test(argv[0] ?? '')) { name = cleanName(argv[0].slice(7)); argv.shift() }
 const [cmd, ...rest] = argv
-if (cmd === '__daemon') { await runDaemon(rest[0]); await new Promise(() => {}) } // the daemon: this process stays until it stops itself
+if (cmd === '__daemon') { await runDaemon(rest[0], cleanName(rest[1])); await new Promise(() => {}) } // the daemon: this process stays until it stops itself
 if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') { console.log(USAGE); process.exit(0) }
 
 const cwd = process.cwd()
 const git = (...a: string[]) => { try { return execFileSync('git', a, { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() } catch { return '' } }
 const root = git('rev-parse', '--show-toplevel') || cwd
-const P = paths(root)
+const P = paths(root, name)
 
 // Pictures go in <root>/tmp/lantern. In a git repo that folder is kept out of git for you (in .git/info/exclude, so
 // the repo's own .gitignore is left alone).
@@ -66,7 +70,7 @@ async function reapOrphan() {
 function start() {
   fs.mkdirSync(path.dirname(P.log), { recursive: true })
   const log = fs.openSync(P.log, 'a')
-  const child = spawn(process.execPath, [here, '__daemon', root], { detached: true, stdio: ['ignore', log, log], env: process.env })
+  const child = spawn(process.execPath, [here, '__daemon', root, ...(name ? [name] : [])], { detached: true, stdio: ['ignore', log, log], env: process.env })
   child.unref()
   return child
 }
@@ -102,6 +106,19 @@ async function ask(req: object): Promise<Reply> {
 
 async function main() {
   let req: object
+  if (cmd === 'watch' && rest.includes('--all')) {
+    // Every lantern on this project side by side: one page of live views, written where the pictures go.
+    const up = instances(root)
+    if (!up.length) die(`no lantern is running for ${root}`)
+    const views: { name: string; url: string }[] = []
+    for (const n of up) { const r = await new Promise<Reply | null>((res) => { const c = net.createConnection(paths(root, n || undefined).sock); let buf = ''; c.on('connect', () => c.write(JSON.stringify({ cmd: 'preview' }) + '\n')); c.on('data', (d) => (buf += d)); c.on('end', () => { try { res(JSON.parse(buf)) } catch { res(null) } }); c.on('error', () => res(null)) }); if (r?.ok) views.push({ name: n || 'lantern', url: r.text }) }
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
+    const html = `<!doctype html><meta charset="utf-8"><title>lantern · ${esc(path.basename(root))} · all</title><style>html,body{margin:0;height:100%;background:#0f0f12}body{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:4px;padding:4px;box-sizing:border-box}iframe{width:100%;height:100%;min-height:48vh;border:0;border-radius:6px;background:#16161a}</style>${views.map((v) => `<iframe src="${esc(v.url)}" title="${esc(v.name)}"></iframe>`).join('')}`
+    fs.mkdirSync(P.out, { recursive: true }); const file = path.join(path.resolve(root, paths(root).out), 'watch.html'); fs.writeFileSync(file, html)
+    console.log(`${file}\n${views.map((v) => `${v.name}: ${v.url}`).join('\n')}\nwatching ${root} — every lantern on it, side by side. Open that in a browser (or \`lantern watch --all --open\`).`)
+    if (rest.includes('--open')) { const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'; try { spawn(opener, [file], { detached: true, stdio: 'ignore' }).unref() } catch {} }
+    process.exit(0)
+  }
   if (cmd === 'watch') {
     // A live view of the page in your own browser, for a person who wants to see what the agent is doing.
     const r = await ask({ cmd: 'preview' })
@@ -121,7 +138,8 @@ async function main() {
     if (!fs.existsSync(P.sock)) {
       let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}
       if (pid && alive(pid)) { if (cmd === 'close') { await reapOrphan(); console.log('closed (it had lost its socket)') } else console.log(`lantern (pid ${pid}) is running for ${root} but its socket is gone: \`lantern close\` will stop it`); return }
-      console.log(cmd === 'status' ? `lantern is not running for ${root}\n  log: ${P.log}` : 'lantern was not running'); return
+      const others = instances(root).filter((n) => n !== (name ?? ''))
+      console.log(cmd === 'status' ? `lantern${name ? ` "${name}"` : ''} is not running for ${root}\n  log: ${P.log}${others.length ? `\n  also on this project: ${others.map((n) => n || '(unnamed)').join(', ')}` : ''}` : 'lantern was not running'); return
     }
     req = { cmd }
   } else if (cmd === 'frame') {

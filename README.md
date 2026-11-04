@@ -59,7 +59,8 @@ The plugin brings only the skills; the first time Claude needs the CLI, the skil
 - **Frames for a pull request**: one picture, a before/after pair, or numbered steps, with a title drawn in, rounded corners, a shadow, and the branch and time in the footer. A recording started with `--title` gets the same frame as a video.
 - **Demo videos**: frames are kept only while a command runs and for a beat after, so the agent's thinking between commands is cut; captions hold for at least 2.5 seconds; the pointer glides to each target; a ring and a little mouse show each click; a keycap strip shows typing; a pill shows scrolling. ffmpeg assembles an MP4 when it is installed; otherwise Chrome encodes the video itself (MP4 where it can, WebM otherwise; GitHub plays both inline).
 
-- **A live view** for a person: `lantern watch` prints the URL of a page (`--open` opens it) that shows what the agent's page paints, with a line saying what it just did. Tools that embed lantern (forest's Agent Browser panel) get the same frames as JSON lines over the daemon's socket.
+- **Several at once**: `LANTERN_NAME=review-2 lantern …` (or `lantern --name review-2 …`) is a lantern of its own on the same project — its own browser, login and `tmp/lantern/review-2/` — so parallel agents never fight over one page; `lantern status` lists them and `lantern watch --all` shows them side by side.
+- **A live view** for a person: `lantern watch` prints the URL of a page (`--open` opens it) that shows what the agent's page paints, with a line saying what it just did. Tools that embed lantern (a panel in an editor or an app) get the same frames as JSON lines over the daemon's socket.
 
 Pictures and videos go in `<project>/tmp/lantern/`, which lantern adds to `.git/info/exclude` so nothing lands in git.
 
@@ -80,7 +81,7 @@ Most projects need none. A `.lantern.json` at the project root, or the same keys
 }
 ```
 
-`url` is where relative paths go before any page has been opened. `hosts` keeps the page on your app: a navigation anywhere else fails and is noted in `lantern console`. `out` moves the pictures. `note` goes in the frame's footer and `footer` replaces it. `accent` recolours everything lantern draws. `watermark: false` leaves the banner off videos and the "made with lantern" out of the frame's footer. `onLoad` runs after each load, which is how forest logs its agent in as the dev user. `LANTERN_CHROME` and `LANTERN_FFMPEG` point at those binaries; `LANTERN_HOME` moves lantern's own state (default `~/.lantern`).
+`url` is where relative paths go before any page has been opened. `hosts` keeps the page on your app: a navigation anywhere else fails and is noted in `lantern console`. `out` moves the pictures. `note` goes in the frame's footer and `footer` replaces it. `accent` recolours everything lantern draws. `watermark: false` leaves the banner off videos and the "made with lantern" out of the frame's footer. `onLoad` runs after each load, a dev login, say. `LANTERN_CHROME` and `LANTERN_FFMPEG` point at those binaries; `LANTERN_HOME` moves lantern's own state (default `~/.lantern`).
 
 ## How it is put together
 
