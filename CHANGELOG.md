@@ -2,6 +2,12 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.4.2 — 2026-11-04
+
+### Fixed
+- Frame: type is sized by the frame's width again, so every frame in a pull request reads the same
+  - Sizing by the longer side gave a tall stacked pair bigger type than the single shot beside it, since GitHub fits every image to the same column width; the video banner follows the same rule
+
 ## 0.4.1 — 2026-11-04
 
 ### Fixed
