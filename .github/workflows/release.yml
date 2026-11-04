@@ -1,7 +1,17 @@
+# A release, two ways. "Run workflow" here (or `gh workflow run release.yml -f version=0.2.1`): the tests run,
+# then scripts/release.ts moves the changelog, bumps the versions, commits and tags on main, and the run carries on
+# to the GitHub Release and npm. Or push a tag made by `npm run release -- <version>` on a laptop, and the run
+# starts from there. Either way the package goes to npm by trusted publishing, with provenance.
 name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to release: 0.2.1, or patch | minor | major'
+        required: true
+        type: string
 permissions:
   contents: write
   id-token: write
@@ -10,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -18,19 +30,25 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - name: Check the tag matches package.json
+      - name: Cut the release on main (Run workflow)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm run release -- "${{ inputs.version }}"
+      - name: Which release this is
         run: |
           V=$(node -p "require('./package.json').version")
-          [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} but package.json says $V"; exit 1; }
+          if [ "${{ github.event_name }}" = "push" ]; then [ "v$V" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} but package.json says $V"; exit 1; }; fi
+          echo "REL=v$V" >> "$GITHUB_ENV"; echo "V=$V" >> "$GITHUB_ENV"; echo "releasing lantern $V"
       - name: Release notes from CHANGELOG.md
-        run: node scripts/release.ts notes "${GITHUB_REF_NAME#v}" > notes.md && cat notes.md
+        run: node scripts/release.ts notes "$V" > notes.md && cat notes.md
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          V="${GITHUB_REF_NAME#v}"
           PRE=""; case "$V" in 0.*) PRE="--prerelease";; esac
-          gh release create "$GITHUB_REF_NAME" --title "lantern $V" --notes-file notes.md $PRE
+          gh release create "$REL" --title "lantern $V" --notes-file notes.md $PRE
       # To npm. With an NPM_TOKEN secret (an npm granular access token that may publish @benwallacestock/lantern) it publishes
       # with that; without one it tries npm's trusted publishing, which works once the package on npmjs.com names
       # this repository and workflow as its publisher. Either way the package carries provenance.

@@ -10,6 +10,7 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 
 ### Changed
 - The Claude plugin's version now moves with each release, so plugin users get updates (it had stayed at 0.1.0).
+- A release can be cut from GitHub (Actions → Release → Run workflow, with the version): tests, changelog, versions, tag, GitHub Release and npm, in one run.
 
 ## 0.2.0 — 2026-11-04
 
