@@ -87,7 +87,14 @@ For a change a still can't show — a drag, a flow across pages, something anima
 
 ## Settings
 
-Most projects need none. A `.lantern.json` at the project root (or `LANTERN_URL`, `LANTERN_HOSTS`, `LANTERN_OUT`, `LANTERN_NOTE`, `LANTERN_FOOTER`, `LANTERN_ACCENT`, `LANTERN_WATERMARK`, `LANTERN_ON_LOAD` in the environment) sets: `url`, where paths resolve before any page is open; `hosts`, the only hosts the page may visit; `out`, where pictures go; `note` and `footer`, for the frame; `accent`, the colour of highlights, rings and the glyph (lantern's orange by default); `watermark: false` to leave the banner off videos and "made with lantern" out of frames; `branch: false` to keep the branch name out of the footer; `onLoad`, JavaScript run after every load (a dev login, say). If `open` says the browser only visits this project's hosts, that is the project's choice: stay on them.
+Most projects need none: `lantern open http://localhost:3000` and go. When something is missing — the page needs a dev login, pictures should go elsewhere, the footer should say something else — put the setting where it belongs, and never a secret in the repository:
+
+- **Your own one-off**: the environment of the command — `LANTERN_URL=… lantern open /`, `LANTERN_FOOTER="…" lantern frame …`. Nothing written anywhere.
+- **This machine, this project**: `~/.lantern/projects/<hash>.json`, lantern's own folder, outside the repository. `lantern settings` prints the exact path; write plain JSON there. A dev login (`onLoad` with a password in it), a local `out` folder, a branch name to hide: this file, never the repo.
+- **The team's, committed**: a `.lantern.json` at the project root, only if the project already has one or the person asks for it; `url` and `hosts`, nothing with a secret.
+- **Your defaults everywhere**: `~/.lantern/settings.json` — an `accent`, a `footer`, `update: false`.
+
+First wins in that order. `lantern settings` shows what is in force and where each value came from; the daemon reads settings when it starts, so after a change `lantern close` and the next command picks it up. The keys: `url`, where paths resolve before any page is open; `hosts`, the only hosts the page may visit (a navigation anywhere else fails and is noted in `lantern console` — if `open` says the browser only visits this project's hosts, that is the project's choice: stay on them); `out`, where pictures go; `note` and `footer`, for the frame; `accent`, the colour of highlights, rings and the glyph; `watermark: false` to leave the banner off videos and "made with lantern" out of frames; `branch: false` to keep the branch name out of the footer; `onLoad`, JavaScript run in the page after every load; `update: false` to stop the daily check for a newer lantern.
 
 ## What it can't do
 

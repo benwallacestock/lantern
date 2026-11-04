@@ -172,6 +172,22 @@ test('watch over the socket: JSON lines with frames and actions', async () => {
   assert.ok(lines.some((l) => l.frame && l.url), 'a frame line')
   assert.ok(lines.some((l) => l.did === 'filled "Walk name"'), `a did line: ${JSON.stringify(lines.filter((l) => l.did))}`)
 })
+test('settings from lantern\'s own folder, outside the repository, over the repo file, under the environment; `lantern settings` says which', async () => {
+  await ok('close'); await pause(300)
+  const { projectKey } = await import('../src/config.ts')
+  const mine = path.join(home, 'projects', `${projectKey(fs.realpathSync(proj))}.json`); fs.mkdirSync(path.dirname(mine), { recursive: true }) // the CLI keys the real path (git's toplevel), as a tool writing this file must
+  fs.writeFileSync(path.join(home, 'settings.json'), JSON.stringify({ accent: '#000001', footer: 'for every project' })) // the user's defaults, under everything
+  fs.writeFileSync(path.join(proj, '.lantern.json'), JSON.stringify({ url: app.url, note: 'FROM-REPO', accent: '#123456' }))
+  fs.writeFileSync(mine, JSON.stringify({ note: 'FROM-HOME', onLoad: "document.documentElement.dataset.where = 'home'" }))
+  try {
+    const s = (await lanternWith({ LANTERN_ACCENT: '#4cc3ff' }, 'settings')).out
+    assert.match(s, /url\s+http:\/\/127\.0\.0\.1:\d+\s+repo/); assert.match(s, /note\s+FROM-HOME\s+home/); assert.match(s, /accent\s+#4cc3ff\s+environment/); assert.match(s, /onLoad\s+document\.documentElement.*home/)
+    assert.match(s, /footer\s+for every project\s+user/); assert.ok(s.includes(mine), 'says where the home file is')
+    await ok('open', '/about'); assert.equal(await ok('eval', 'document.documentElement.dataset.where'), 'home', 'the home file\'s onLoad ran')
+    await ok('close'); await pause(300)
+  } finally { fs.rmSync(path.join(proj, '.lantern.json'), { force: true }); fs.rmSync(mine, { force: true }); fs.rmSync(path.join(home, 'settings.json'), { force: true }) }
+})
+
 test('settings in .lantern.json: url, hosts, onLoad', async () => {
   await ok('close'); await pause(300)
   fs.writeFileSync(path.join(proj, '.lantern.json'), JSON.stringify({ url: app.url, hosts: ['127.0.0.1'], note: 'TEST-1', accent: '#4cc3ff', onLoad: "document.documentElement.dataset.hook = 'ran'" }))

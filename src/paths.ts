@@ -1,19 +1,13 @@
 // Where lantern keeps things. One Chrome per project (the git root, or the folder lantern was run from), so each
 // has its own socket, profile and log under ~/.lantern; pictures and videos go in the project, under tmp/lantern,
 // because that is the one place an agent is always allowed to read.
-import crypto from 'node:crypto'
-import { readConfig } from './config.ts'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
-
-export const home = process.env.LANTERN_HOME || path.join(os.homedir(), '.lantern')
+import { home, projectKey, readConfig } from './config.ts'
+export { home, projectKey }
 
 /** A name for one of several lanterns on the same project (parallel agents): letters, digits, dashes, dots; LANTERN_NAME or --name. */
 export const cleanName = (name?: string) => { const n = (name ?? '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32); return n || undefined }
-/** The hash every instance of a project shares: <hash>.sock is the unnamed one, <hash>-<name>.sock a named one. */
-export const projectKey = (root: string) => crypto.createHash('sha1').update(root).digest('hex').slice(0, 12)
-
 export function paths(root: string, name?: string) {
   const base = projectKey(root), key = name ? `${base}-${name}` : base
   const out = path.resolve(root, readConfig(root).out ?? path.join('tmp', 'lantern'))

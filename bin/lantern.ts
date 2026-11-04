@@ -8,6 +8,7 @@ import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findChrome, NO_CHROME } from '../src/chrome.ts'
+import { KEYS, readSettings } from '../src/config.ts'
 import { runDaemon } from '../src/daemon.ts'
 import { buildId, cleanName, instances, paths } from '../src/paths.ts'
 import { USAGE } from '../src/usage.ts'
@@ -129,6 +130,14 @@ async function main() {
   }
   if (cmd === 'version' || cmd === '--version' || cmd === '-v') { console.log(`lantern ${version()}${updateHint(P.home)}`); return }
   if (cmd === 'update') { const r = await updateNow(P.home); if (!r.ok) die(r.text); console.log(r.text); return }
+  if (cmd === 'settings') {
+    // What is in force for this project and where each value came from; and where to put what must not be committed.
+    const { config, sources, homeFile, repoFile, userFile } = readSettings(root)
+    const show = (v: unknown) => { const s = Array.isArray(v) ? v.join(', ') : String(v); return s.length > 72 ? s.replace(/\s+/g, ' ').slice(0, 69) + '…' : s }
+    const lines = KEYS.filter((k) => (config as any)[k] !== undefined).map((k) => `  ${k.padEnd(10)} ${show((config as any)[k]).padEnd(72)} ${sources[k]}`)
+    console.log(`settings for ${root}${name ? ` (lantern "${name}")` : ''}:\n${lines.length ? lines.join('\n') : '  (none: defaults)'}\n\nfrom, first wins: the environment (LANTERN_URL, LANTERN_ON_LOAD, …) · home: ${homeFile}${fs.existsSync(homeFile) ? '' : ' (none)'} · repo: ${repoFile}${fs.existsSync(repoFile) ? '' : ' (none)'} · user: ${userFile}${fs.existsSync(userFile) ? '' : ' (none)'}\nA login or anything with a secret goes in the home file, outside the repository; the daemon reads settings when it starts (\`lantern close\` to pick up a change).`)
+    return
+  }
   if (cmd === 'skills') {
     if (rest[0] === 'install') { console.log(installSkills()); return }
     if (!rest[0] || rest[0] === 'status') { console.log(skillsStatus()); return }
