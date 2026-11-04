@@ -1,6 +1,7 @@
-// The lantern daemon: one per project, started by the first `lantern` command and gone again after half an hour
-// idle. It owns the Chrome and the page, so the page lives on between an agent's commands — however long the
-// agent thinks in between. A unix socket under ~/.lantern: one JSON line in, one out. Only this user can reach it.
+// The lantern daemon: one per project, started by the first `lantern` command and gone again half an hour after
+// the last one. It owns the Chrome and the page, so the page lives on between an agent's commands — however long
+// the agent thinks in between. A unix socket under ~/.lantern: one JSON line in, one out. Only this user can reach it.
+// Only commands count as use: a live view left open in a tab, or a recording nobody stopped, doesn't keep it alive.
 import fs from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
@@ -9,13 +10,13 @@ import { findChrome, launchChrome, NO_CHROME } from './chrome.ts'
 import type { Chrome } from './cdp.ts'
 import { frame } from './frame.ts'
 import { Page, SETTLE, type Reply } from './page.ts'
-import { paths } from './paths.ts'
+import { buildId, paths } from './paths.ts'
 import { readConfig } from './config.ts'
 
 let root = ''
 let P: ReturnType<typeof paths>
 let CONFIG: ReturnType<typeof readConfig>
-const IDLE = 30 * 60_000
+const IDLE = Number(process.env.LANTERN_IDLE_MS) || 30 * 60_000 // the env is for the tests
 /** Commands whose outcome a watcher is told about, in words. */
 const ACTS = new Set(['open', 'click', 'dblclick', 'rightclick', 'hover', 'highlight', 'callout', 'drag', 'scroll', 'fill', 'type', 'press', 'select', 'check', 'uncheck', 'upload', 'back', 'reload', 'wait'])
 /** Commands a recording keeps rolling for: things that happen on the page. A snapshot or a text read between
@@ -39,8 +40,9 @@ function stop(why: string): Promise<void> {
   log('shutting down:', why)
   try { server?.close() } catch {}
   try { preview?.close() } catch {}
-  try { if (owned) { fs.rmSync(P.sock, { force: true }); fs.rmSync(P.pid, { force: true }) } } catch {}
+  try { if (owned) { fs.rmSync(P.sock, { force: true }); fs.rmSync(P.pid, { force: true }); fs.rmSync(P.build, { force: true }) } } catch {}
   stopping = (async () => {
+    if (page?.rec) { log('a recording was still running; it is lost'); try { fs.rmSync(page.rec.dir, { recursive: true, force: true }) } catch {} }
     // Keep the login: cookies go to the profile folder (readable by this user only) and come back next start.
     if (page) { try { fs.writeFileSync(path.join(P.profile, 'cookies.json'), JSON.stringify(await page.cookiesOut()), { mode: 0o600 }) } catch (e) { log('could not save cookies:', (e as Error).message) } }
   })().then(() => new Promise<void>((done) => {
@@ -113,7 +115,11 @@ function previewUrl(): Promise<string> {
     const p = await thePage()
     if (req.url === '/stream') {
       res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
-      const send = (jpeg: Buffer) => { if (res.destroyed || res.writableLength > 1_500_000) return; res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`); res.write(jpeg); res.write('\r\n') }
+      // A browser shows a part once the next part has begun, so each frame is followed at once by the next part's
+      // headers (the boundary delimits the picture): a page that isn't changing still shows its first frame.
+      const HEAD = '--frame\r\nContent-Type: image/jpeg\r\n\r\n'
+      res.write(HEAD)
+      const send = (jpeg: Buffer) => { if (res.destroyed || res.writableLength > 1_500_000) return; res.write(jpeg); res.write('\r\n' + HEAD) }
       const w = { frame: send }
       p.watchers.add(w); await p.wantFrames()
       if (p.lastFrame) send(p.lastFrame)
@@ -138,6 +144,10 @@ header b{font-size:14px;letter-spacing:.01em}
 header .name{color:#8a8a95}
 header .live{margin-left:auto;display:flex;align-items:center;gap:7px;color:#8a8a95;font-size:12px}
 header .live i{width:8px;height:8px;border-radius:50%;background:#ff7a2f;box-shadow:0 0 10px rgba(255,122,47,.8);display:inline-block;animation:p 1.6s ease-in-out infinite}
+body.closed header .live i{background:#55555f;box-shadow:none;animation:none}
+body.closed img,body.closed canvas{opacity:.35;filter:grayscale(1)}
+canvas{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,.6);border-radius:4px}
+body.closed #did{color:#ff7a2f}
 @keyframes p{0%,100%{opacity:1}50%{opacity:.35}}
 main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,rgba(255,122,47,.08),transparent 60%),#0f0f12}
 img{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 20px 60px rgba(0,0,0,.6);border-radius:4px}
@@ -148,7 +158,9 @@ footer{display:flex;gap:14px;align-items:center;padding:8px 14px;border-top:1px 
 <header><svg viewBox="0 0 256 256" aria-hidden="true"><rect width="256" height="256" rx="56" fill="#16161a"/><circle cx="128" cy="146" r="92" fill="#ff7a2f" opacity=".25"/><path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="8" stroke-linecap="round"/><path d="M90 76 L166 76 L158 60 L98 60 Z" fill="#e8e8ee"/><rect x="84" y="74" width="88" height="12" rx="5" fill="#e8e8ee"/><rect x="92" y="86" width="72" height="92" rx="12" fill="#ff7a2f" fill-opacity=".7" stroke="#e8e8ee" stroke-width="8"/><path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="#fff1c2"/><rect x="84" y="178" width="88" height="14" rx="6" fill="#e8e8ee"/><rect x="100" y="192" width="56" height="10" rx="4" fill="#c9c9d2"/></svg><b>lantern</b><span class="name">${name}</span><span class="live"><i></i>live</span></header>
 <main><img src="/stream" alt="the page lantern is driving"></main>
 <footer><span id="did">watching — the picture moves as the page changes</span><span id="url">${p.currentUrl}</span></footer>
-<script>const es=new EventSource('/events');es.onmessage=(e)=>{const d=JSON.parse(e.data);if(d.did)document.getElementById('did').textContent=d.did;if(d.url)document.getElementById('url').textContent=d.url}</script>`)
+<script>const es=new EventSource('/events');es.onmessage=(e)=>{const d=JSON.parse(e.data);if(d.did)document.getElementById('did').textContent=d.did;if(d.url)document.getElementById('url').textContent=d.url}
+const im=document.querySelector('img'),cv=document.createElement('canvas');setInterval(()=>{if(im.naturalWidth&&im.isConnected){cv.width=im.naturalWidth;cv.height=im.naturalHeight;cv.getContext('2d').drawImage(im,0,0)}},500)
+es.onerror=()=>{es.close();document.body.classList.add('closed');if(cv.width)im.replaceWith(cv);else im.remove();document.querySelector('.live').lastChild.textContent='closed';document.getElementById('did').textContent='lantern has closed (no command for a while) — run lantern watch again for a new view'}</script>`)
     }
   })
   return new Promise((r) => preview!.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${(preview!.address() as net.AddressInfo).port}/`)))
@@ -198,7 +210,7 @@ async function main() {
     conn.on('error', () => {})
   })
   server.on('error', (e) => { console.error('socket error:', e.message); shutdown('socket error') })
-  server.listen(P.sock, () => { try { fs.chmodSync(P.sock, 0o600); fs.writeFileSync(P.pid, String(process.pid)); owned = true } catch {}; log('listening on', P.sock) })
-  setInterval(() => { if (Date.now() - used > IDLE && !page?.rec && !page?.watchers.size) shutdown('idle for 30 minutes') }, 60_000)
+  server.listen(P.sock, () => { try { fs.chmodSync(P.sock, 0o600); fs.writeFileSync(P.pid, String(process.pid)); fs.writeFileSync(P.build, buildId()); owned = true } catch {}; log('listening on', P.sock) })
+  setInterval(() => { if (Date.now() - used > IDLE) shutdown(`no command for ${Math.round(IDLE / 60_000)} minutes`) }, Math.min(60_000, IDLE))
 }
 

@@ -5,6 +5,8 @@ What changed in lantern, release by release, in the shape of [Keep a Changelog](
 ## Unreleased
 
 ### Fixed
+- The daemon closes itself 30 minutes after the last command, whatever else is going on: a live view left open in a browser tab (or a recording nobody stopped) kept it and its Chrome alive all night. The live view now says when lantern has closed, keeps the last picture, and shows the first one straight away (it waited for the page to change).
+- After updating lantern, the next command restarts a daemon left from the earlier install (its page comes back), instead of driving the old code.
 - Recordings played in slow motion once every painted frame was kept: a minimum frame time meant for sparse captures stretched dense ones. Clips are real time now, and `record stop` gives the length to a decimal.
 - `lantern text` and `wait` no longer see lantern's own overlays (the typing bubble lingered in the page's text).
 - `scroll to body` went to the bottom; now `scroll top` and `scroll bottom` exist and `scroll to body` means the top.

@@ -34,7 +34,7 @@ lantern get text|value|attr <name>|style <property>|count|box <target> · is vis
 lantern wait 1500 · wait "Saved"   # a pause (30s at most), or until that text is on the page (10s at most)
 lantern url · back · reload · console [--clear] · eval <js>
 lantern size phone            # or tablet, laptop, desktop (1440×900, the start), wide, or 1200x800 — held until changed
-lantern status · close        # is it up; close the browser (it closes itself after 30 minutes idle)
+lantern status · close        # is it up; close the browser (it closes itself 30 minutes after the last command)
 ```
 
 **Targets.** A ref from the last snapshot (`e12`), `text=Name` (case-insensitive; the whole visible text of an element, or the name the snapshot showed for it: a label, placeholder, aria-label or button value), a CSS selector, or `x,y` in viewport pixels for a canvas. Every snapshot renumbers refs, and they die with a navigation or reload: re-read before reusing a number. `text=` and selectors always work, and reach inside open shadow roots. Quote targets with spaces: `"text=Save changes"`. When several elements read the same, lantern uses the first that looks pressable and says so; a selector picks another. If something is in front of the target (an overlay, a modal's backdrop), the click is refused and the thing in front is named: close it first.

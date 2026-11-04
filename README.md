@@ -24,7 +24,7 @@ lantern record stop                    # → tmp/lantern/demo-….mp4
 lantern watch                          # a live view of the page, in your own browser
 ```
 
-Each command is a short-lived process. The first one starts a daemon for the project that owns the Chrome and the page, so the page survives between commands however long the agent thinks in between. It closes itself after half an hour idle, or on `lantern close`. No window, no app, no debugging port: Chrome is driven over its pipe.
+Each command is a short-lived process. The first one starts a daemon for the project that owns the Chrome and the page, so the page survives between commands however long the agent thinks in between. It closes itself half an hour after the last command (a live view left open in a tab doesn't keep it up), or on `lantern close`. No window, no app, no debugging port: Chrome is driven over its pipe.
 
 ## Install
 

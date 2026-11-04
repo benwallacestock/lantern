@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { after, before, test } from 'node:test'
-import { duration, firstLine, pause, pngSize, probe, setup, sh, type Run } from './helpers.ts'
+import { execFile } from 'node:child_process'
+import os from 'node:os'
+import { BIN, duration, firstLine, pause, pngSize, probe, setup, sh, type Run } from './helpers.ts'
 
 let t: Awaited<ReturnType<typeof setup>>
 let app: { url: string; close: () => void }, home = '', proj = ''
@@ -71,6 +73,46 @@ test('watch: a live preview page streams frames and actions', async () => {
   ac2.abort(); await poke2
   assert.match(text, /"did":"clicked \\"Estimate time\\""/)
 })
+test('idle exit: a watch tab left open does not keep the daemon alive', async () => {
+  // Its own project, so its short idle window doesn't take the shared daemon down with it.
+  const proj2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-idle-'))
+  await sh('git', ['-C', proj2, 'init', '-q'])
+  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home, LANTERN_IDLE_MS: '1500' }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  try {
+    const r = await run('open', app.url + '/'); assert.ok(r.ok, r.out)
+    const url = firstLine((await run('watch', '--no-open')).out)
+    const ac = new AbortController()
+    const res = await fetch(url + 'stream', { signal: ac.signal }) // a tab watching, as one left open overnight
+    const reading = res.body!.getReader().read()
+    const pid = Number(/pid (\d+)/.exec((await run('status')).out)?.[1]); assert.ok(pid, 'status gives the pid')
+    const alive = () => { try { process.kill(pid, 0); return true } catch { return false } }
+    const t0 = Date.now()
+    while (Date.now() - t0 < 10_000 && alive()) await pause(250) // no commands now: status would count as one
+    assert.ok(!alive(), 'the daemon went on its own')
+    assert.match((await run('status')).out, /not running/)
+    await reading.catch(() => {}); ac.abort()
+    const logs = fs.readdirSync(path.join(home, 'log')).map((f) => fs.readFileSync(path.join(home, 'log', f), 'utf8'))
+    assert.ok(logs.some((l) => /shutting down: no command for 0 minutes/.test(l)), 'the log says why it went')
+  } finally { fs.rmSync(proj2, { recursive: true, force: true }) }
+})
+
+test('an updated lantern restarts the daemon of the old one, page and all', async () => {
+  const proj2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-upd-'))
+  await sh('git', ['-C', proj2, 'init', '-q'])
+  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  try {
+    const r = await run('open', app.url + '/about'); assert.ok(r.ok, r.out)
+    const before = Number(/pid (\d+)/.exec((await run('status')).out)?.[1]); assert.ok(before)
+    const build = fs.readdirSync(path.join(home, 'run')).find((f) => f.endsWith('.build') && fs.readFileSync(path.join(home, 'run', f), 'utf8') === fs.readFileSync(path.join(home, 'run', f), 'utf8') && fs.existsSync(path.join(home, 'run', f.replace('.build', '.pid'))) && Number(fs.readFileSync(path.join(home, 'run', f.replace('.build', '.pid')), 'utf8')) === before)!
+    fs.writeFileSync(path.join(home, 'run', build), '0.0.1@1') // as if that daemon came from an earlier install
+    const s = await run('status'); assert.ok(s.ok, s.out)
+    assert.match(s.out, /lantern was updated; restarting its browser/)
+    const after = Number(/pid (\d+)/.exec(s.out)?.[1]); assert.ok(after && after !== before, `a new daemon (${before} → ${after})`)
+    const t = await run('text'); assert.ok(t.ok, t.out) // the page it had comes back with the next command that needs one
+    const again = await run('status'); assert.match(again.out, /\/about/); assert.doesNotMatch(again.out, /restarting/)
+  } finally { await run('close'); fs.rmSync(proj2, { recursive: true, force: true }) }
+})
+
 test('watch over the socket: JSON lines with frames and actions', async () => {
   const net = await import('node:net')
   const sock = path.join(home, 'run', fs.readdirSync(path.join(home, 'run')).find((f) => f.endsWith('.sock'))!)

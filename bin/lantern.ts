@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findChrome, NO_CHROME } from '../src/chrome.ts'
 import { runDaemon } from '../src/daemon.ts'
-import { paths } from '../src/paths.ts'
+import { buildId, paths } from '../src/paths.ts'
 import { USAGE } from '../src/usage.ts'
 
 // This file is the whole program: the CLI, and — started by the CLI as `lantern __daemon <root>` — the daemon. It runs
@@ -71,7 +71,19 @@ function start() {
   return child
 }
 
+/** A daemon from an earlier install keeps that install's code; after an update it is closed (its page comes back) and started again. */
+async function retireOld() {
+  let was = ''; try { was = fs.readFileSync(P.build, 'utf8') } catch {}
+  if (was === buildId()) return
+  let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}
+  if (!pid || !alive(pid)) return // nothing running; a running daemon with no build file (from before this check existed) is old too
+  process.stderr.write('lantern was updated; restarting its browser\n')
+  await connect({ cmd: 'close' })
+  for (let i = 0; i < 40 && pid && alive(pid); i++) await sleep(250)
+}
+
 async function ask(req: object): Promise<Reply> {
+  await retireOld()
   const first = await connect(req)
   if (first) return first
   if (!findChrome()) die(NO_CHROME)

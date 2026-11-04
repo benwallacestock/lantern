@@ -29,7 +29,7 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern record stop           assemble the recording into an MP4 and print its path
 
   lantern watch               a live view of the page in your own browser (prints a URL and opens it; --no-open to just print)
-  lantern status · close      is lantern up for this project; close its browser (it closes itself after 30 minutes idle)
+  lantern status · close      is lantern up for this project; close its browser (it closes itself 30 minutes after the last command)
 
 Pictures, videos and downloads go in <project>/tmp/lantern. Needs a Chrome (or LANTERN_CHROME=…); ffmpeg is optional for video.
 Settings, in the environment or a .lantern.json at the project root: url (where paths resolve), hosts (the only hosts
