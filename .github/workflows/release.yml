@@ -2,7 +2,8 @@
 # decides the version from them (feat → minor, fix and other changes → patch, docs/chore/ci/test → no release),
 # writes the notes into CHANGELOG.md, bumps the versions, commits "lantern x.y.z", tags and pushes; then the GitHub
 # Release is published with those notes and the package goes to npm by trusted publishing, with provenance. The
-# release commit is pushed with the workflow's own token, so it does not start another run.
+# release commit is pushed with the workflow's own token, so it does not start another run. A run with nothing new
+# to cut still publishes the Release or the npm package an earlier run left behind (GitHub has its outages).
 name: Release
 on:
   push:
@@ -39,8 +40,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.cut.outputs.version }}
         run: |
+          if gh release view "v$V" >/dev/null 2>&1; then echo "release v$V exists"; exit 0; fi
           PRE=""; case "$V" in 0.*) PRE="--prerelease";; esac
-          gh release create "v$V" --title "lantern $V" --notes-file notes.md $PRE
+          for wait in 30 60 120 180 240 300 0; do
+            gh release create "v$V" --title "lantern $V" --notes-file notes.md $PRE && exit 0
+            [ "$wait" = 0 ] && exit 1; echo "GitHub refused the release; trying again in ${wait}s"; sleep "$wait"
+          done
       # To npm by trusted publishing: the package on npmjs.com names this repository and workflow as its publisher,
       # so no token is needed and the package carries provenance. (An NPM_TOKEN secret would be used instead if set.)
       - name: Publish to npm

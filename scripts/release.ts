@@ -120,7 +120,13 @@ function main() {
     console.log(`tagged v${v} and pushed`); return
   }
   const version = cmd === 'auto' ? bump(current, commits) : /^\d+\.\d+\.\d+$/.test(cmd) ? cmd : die(`not a version: ${cmd}`)
-  if (!version) { console.log(`nothing to release: ${commits.length} commit(s) since ${since || 'the start'}, none of them feat/fix or a change to the program`); out('version', ''); return }
+  if (!version) {
+    console.log(`nothing new to release: ${commits.length} commit(s) since ${since || 'the start'}, none of them feat/fix or a change to the program`)
+    // The version at HEAD still goes out, so the workflow publishes a Release or an npm package an earlier run left behind.
+    const s = since && since === `v${current}` ? section(log, new RegExp(`^## ${current.replace(/\./g, '\\.')}\\b`)) : null
+    if (s) { fs.writeFileSync('notes.md', s.body + '\n'); out('version', current); console.log(`current release: ${current}`) } else out('version', '')
+    return
+  }
   if (new RegExp(`^## ${version.replace(/\./g, '\\.')}\\b`, 'm').test(log)) die(`${version} is already in ${CHANGELOG}`)
   const body = notes(commits)
   if (!body) die('no notes: no releasable commits')
