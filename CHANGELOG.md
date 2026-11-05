@@ -2,6 +2,12 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.8.1 — 2026-11-05
+
+### Fixed
+- Record: a recording whose actions ran but painted nothing restarts the browser
+  - Chrome can stop painting while still taking input (seen on heavy pages), so the input probe passes and `record stop` found no frames; now a recording with actions and no frames counts as a stalled page, the browser is restarted and the message says to record again. A recording with no actions in it says that instead.
+
 ## 0.8.0 — 2026-11-05
 
 ### Added
