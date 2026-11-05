@@ -47,8 +47,9 @@ function html(req: FrameReq): string {
 
 export async function frame(chrome: Chrome, req: FrameReq, outDir: string): Promise<Reply> {
   if (!req.images?.length) return { ok: false, text: 'give one screenshot to frame, or two for a before/after' }
+  req.images = req.images.map((f) => (!fs.existsSync(f) && fs.existsSync(path.join(outDir, path.basename(f))) ? path.join(outDir, path.basename(f)) : f)) // a bare name: the pictures folder
   for (const f of req.images) {
-    if (!fs.existsSync(f)) return { ok: false, text: `no such image: ${f}` }
+    if (!fs.existsSync(f)) return { ok: false, text: `no such image: ${f} (screenshots are in ${outDir})` }
     const head = Buffer.alloc(8); try { const fd = fs.openSync(f, 'r'); fs.readSync(fd, head, 0, 8, 0); fs.closeSync(fd) } catch {}
     if (!head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { ok: false, text: `not a PNG: ${f} (frame takes the PNGs that \`lantern screenshot\` makes)` }
   }

@@ -57,6 +57,7 @@ export class Page {
   log: string[] = []
   popups: string[] = []
   rec?: Rec
+  marks: { kind: Annotation; target: string; opts?: { text?: string; n?: number } }[] = [] // the annotations the agent set, put back after a navigation
   hl = false // a highlight the agent set (as opposed to one a screenshot lit for the picture)
   co = false // a callout is up
   at?: { x: number; y: number } // where the pointer rests
@@ -198,6 +199,12 @@ export class Page {
     if (this.rec?.caption) this.fire(CAPTION_JS(this.rec.caption)) // a caption outlives a navigation
     if (this.at) this.fire(CURSOR_JS(this.at.x, this.at.y)) // so does the pointer
     if (this.config.onLoad) this.fire(this.config.onLoad) // the project's own after-load script: a dev login, say
+    if (this.marks.length) void this.remark() // and the annotations, where their targets are still on the new page
+  }
+  /** Put the agent's annotations back after a navigation: each on its target if the new page has it (a blur over a name, say). */
+  private async remark() {
+    await sleep(400)
+    for (const m of this.marks) { try { const at = await this.evaluate<{ error?: string }>(locateJs(m.target, false)); if (!at.error) await this.evaluate(ANNOTATE_JS(m.kind, m.opts)) } catch {} }
   }
   /** Tell whoever is watching what just happened, in words — 'clicked "Save changes"' — not the command as typed. */
   did(text: string) { for (const w of this.watchers) w.did?.(text) }
@@ -503,22 +510,22 @@ export class Page {
       // ---- annotations: drawn on the page, in screenshots and recordings, following their element until it goes or `clear`
       case 'highlight': {
         if (!rest[0]) return { ok: false, text: 'highlight what? a ref, text=Label, a selector — or off' }
-        if (rest[0] === 'off') { this.hl = false; await this.evaluate(CLEAR_JS('highlight')).catch(() => {}); return { ok: true, text: 'highlight off' } }
+        if (rest[0] === 'off') { this.hl = false; this.marks = this.marks.filter((m) => m.kind !== 'highlight'); await this.evaluate(CLEAR_JS('highlight')).catch(() => {}); return { ok: true, text: 'highlight off' } }
         const { rect: r, name, matches } = await this.locate(rest.join(' '))
-        await this.evaluate(ANNOTATE_JS('highlight')).catch(() => {}); this.hl = true
+        await this.evaluate(ANNOTATE_JS('highlight')).catch(() => {}); this.hl = true; this.marks.push({ kind: 'highlight', target: rest.join(' ') })
         await this.pointerClear(r)
         return { ok: true, text: `highlighting "${name}"${this.several({ x: 0, y: 0, name, matches })} — it glows in screenshots and the recording, follows the element and goes when it does; \`lantern highlight off\` ends it` }
       }
       case 'callout': {
         // callout <target> <words> · callout 2 <target> <words> (numbered) · callout off
         if (!rest[0]) return { ok: false, text: 'callout what? `lantern callout <target> <words>` — or `callout off`' }
-        if (rest[0] === 'off') { this.co = false; await this.evaluate(CLEAR_JS('callout')).catch(() => {}); return { ok: true, text: 'callout off' } }
+        if (rest[0] === 'off') { this.co = false; this.marks = this.marks.filter((m) => m.kind !== 'callout'); await this.evaluate(CLEAR_JS('callout')).catch(() => {}); return { ok: true, text: 'callout off' } }
         let n: number | undefined
         if (/^\d{1,2}$/.test(rest[0]) && rest.length > 2) { n = Number(rest.shift()) }
         if (rest.length < 2) return { ok: false, text: 'callout needs the words: `lantern callout <target> <what to say about it>`' }
         const { rect: r, name } = await this.locate(rest[0])
         const words = rest.slice(1).join(' ')
-        await this.evaluate(ANNOTATE_JS('callout', { text: words, n })).catch(() => {}); this.co = true
+        await this.evaluate(ANNOTATE_JS('callout', { text: words, n })).catch(() => {}); this.co = true; this.marks.push({ kind: 'callout', target: rest[0], opts: { text: words, n } })
         await this.pointerClear(r)
         return { ok: true, text: `callout${n != null ? ` ${n}` : ''} on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
       }
@@ -527,7 +534,7 @@ export class Page {
         if (rest.length < 2 || !/^\d{1,2}$/.test(rest[0])) return { ok: false, text: 'usage: lantern badge <n> <target> — a numbered disc on the element; `lantern clear badge` takes them off' }
         const n = Number(rest[0])
         const { rect: r, name, matches } = await this.locate(rest.slice(1).join(' '))
-        await this.evaluate(ANNOTATE_JS('badge', { n })).catch(() => {})
+        await this.evaluate(ANNOTATE_JS('badge', { n })).catch(() => {}); this.marks.push({ kind: 'badge', target: rest.slice(1).join(' '), opts: { n } })
         await this.pointerClear(r)
         return { ok: true, text: `badge ${n} on "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear badge\` takes the badges off, \`lantern clear\` everything` }
       }
@@ -536,7 +543,7 @@ export class Page {
         // · blur <target>: the element blurred out, for a name or a number that must not be in the picture
         if (!rest[0]) return { ok: false, text: `${sub} what? a ref, text=Label, a selector` }
         const { rect: r, name, matches } = await this.locate(rest.join(' '))
-        await this.evaluate(ANNOTATE_JS(sub as Annotation)).catch(() => {})
+        await this.evaluate(ANNOTATE_JS(sub as Annotation)).catch(() => {}); this.marks.push({ kind: sub as Annotation, target: rest.join(' ') })
         await this.pointerClear(r)
         const what = sub === 'ring' ? 'a ring around' : sub === 'arrow' ? 'an arrow pointing at' : 'a blur over'
         return { ok: true, text: `${what} "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear ${sub}\` takes it off, \`lantern clear\` everything` }
@@ -546,6 +553,7 @@ export class Page {
         if (kind && !ANNOTATIONS.includes(kind)) return { ok: false, text: `clear what? one of ${ANNOTATIONS.join(', ')} — or nothing, for all of them` }
         if (!kind || kind === 'highlight') this.hl = false
         if (!kind || kind === 'callout') this.co = false
+        this.marks = kind ? this.marks.filter((m) => m.kind !== kind) : []
         await this.evaluate(CLEAR_JS(kind)).catch(() => {})
         return { ok: true, text: kind ? `${kind} annotations cleared` : 'annotations cleared' }
       }
@@ -702,7 +710,7 @@ export class Page {
         return { ok: true, text: JSON.stringify(r ?? null).slice(0, 4000) }
       }
       case 'record': return this.record(rest)
-      case 'screenshot': return this.screenshot(rest)
+      case 'screenshot': return this.screenshot(rest, cwd)
       case 'console': {
         const out = this.log.slice(-60).join('\n') || '(no warnings, errors, failed requests or dialogs since the page was opened)'
         if (rest[0] === '--clear') this.log.length = 0
@@ -745,7 +753,7 @@ export class Page {
       this.rec = undefined
       this.hl = false
       this.co = false
-      await this.evaluate(CAPTION_JS('') + ';' + CLEAR_JS()).catch(() => {})
+      this.marks = []; await this.evaluate(CAPTION_JS('') + ';' + CLEAR_JS()).catch(() => {})
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
@@ -802,12 +810,14 @@ export class Page {
     return { ok: false, text: 'usage: lantern record start | caption <text> | stop' }
   }
 
-  private async screenshot(rest: string[]): Promise<Reply> {
+  private async screenshot(rest: string[], cwd: string): Promise<Reply> {
     // Of the page, of one element (a ref, text=Label, or a selector — with a little room around it), or of a
     // region given as x,y,w,h in viewport pixels. A reviewer should see the part that matters, not the whole window.
     let clip: Rect | undefined
     let what = ''
     const full = rest.includes('--full'); if (full) rest.splice(rest.indexOf('--full'), 1)
+    let out: string | undefined // --out name.png: a path, or a bare name that stays in the pictures folder
+    const o = rest.findIndex((a) => a === '--out' || a.startsWith('--out=')); if (o >= 0) { out = rest[o].startsWith('--out=') ? rest[o].slice(6) : rest[o + 1]; rest.splice(o, rest[o].startsWith('--out=') ? 1 : 2); if (!out) return { ok: false, text: 'screenshot --out needs a file name' } }
     const crop = rest.includes('--crop'); if (crop) rest.splice(rest.indexOf('--crop'), 1)
     const region = /^(\d+),(\d+),(\d+),(\d+)$/.exec(rest[0] ?? '')
     let lit = 0 // a target without --crop: the whole viewport, the size under test, with the target glowing (the highlight's id, to take off after)
@@ -837,8 +847,8 @@ export class Page {
     fs.mkdirSync(this.outDir, { recursive: true })
     // Keep the last 20 screenshots (only screenshots: framed pictures and videos live here too).
     for (const old of fs.readdirSync(this.outDir).filter((f) => f.startsWith('shot-') && f.endsWith('.png')).sort().slice(0, -19)) fs.rmSync(path.join(this.outDir, old), { force: true })
-    const file = path.join(this.outDir, `shot-${stamp()}.png`)
-    fs.writeFileSync(file, buf)
+    const file = out ? (out.includes('/') || out.includes('\\') ? path.resolve(cwd, out) : path.join(this.outDir, out)) : path.join(this.outDir, `shot-${stamp()}.png`)
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, buf)
     return { ok: true, text: `${file}\n(${w}×${h} of ${await this.where()}${what} — read the file to look at it)` }
   }
 }

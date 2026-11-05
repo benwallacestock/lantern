@@ -17,7 +17,7 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern url · back · reload · console [--clear] · eval <js>
   lantern size [phone|tablet|laptop|desktop|wide|WxH]       the viewport (desktop, 1440×900, to start)
 
-  lantern screenshot [target|x,y,w,h] [--crop] [--full]     prints a PNG path, at 2x. With a target: the page with it glowing;
+  lantern screenshot [target|x,y,w,h] [--crop] [--full] [--out name.png]   prints a PNG path, at 2x. With a target: the page with it glowing;
                               --crop for just the element; --full for the whole page, however long or wide
   lantern highlight <target>    a glowing box around an element, in screenshots and recordings; highlight off ends it
   lantern callout <target> <words>   the words beside the element, joined to it by a line, the element lit; "callout 2 <target> <words>" numbers it; callout off ends it
