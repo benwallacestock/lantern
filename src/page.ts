@@ -11,6 +11,7 @@
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import zlib from 'node:zlib'
 import type { Chrome } from './cdp.ts'
 import { BLUE, FOCUS_JS, KEYS, KEY_GLYPH, ORANGE, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
 import { ACCENT_JS, ANCHOR_JS, ANNOTATE_JS, ANNOTATIONS, CAPTION_JS, CLEAR_JS, CLICK_JS, CURSOR_JS, FX_JS, HUD_JS, REMOVE_JS, WITHOUT_OVERLAYS, type Annotation } from './overlay.ts'
@@ -23,9 +24,38 @@ export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
 type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; scroll?: { x: number; y: number } }
 /** A demo being recorded: every frame the page painted, with when it painted. Assembled on stop. */
-type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; captionTop?: boolean; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string; actions: number }
+type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; captionTop?: boolean; marks: number[]; wrote: number; until: number; extra: number; title?: string; note?: string; footer?: string; actions: number }
 
 /** ms of recording after a command returns: the page reacting, a transition finishing. */
+/** The pixels of a small PNG as Chrome's screencast makes them (8-bit RGB or RGBA, not interlaced), or null for any other. */
+function pngPixels(buf: Buffer): { px: Uint8Array; bpp: number } | null {
+  try {
+    if (buf.length < 33 || buf.readUInt32BE(0) !== 0x89504e47 || buf[24] !== 8 || (buf[25] !== 2 && buf[25] !== 6) || buf[28]) return null
+    const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20), bpp = buf[25] === 6 ? 4 : 3, idat: Buffer[] = []
+    for (let o = 8; o + 12 <= buf.length; ) { const len = buf.readUInt32BE(o); if (buf.toString('latin1', o + 4, o + 8) === 'IDAT') idat.push(buf.subarray(o + 8, o + 8 + len)); o += 12 + len }
+    const raw = zlib.inflateSync(Buffer.concat(idat)), stride = w * bpp, px = new Uint8Array(h * stride)
+    for (let y = 0; y < h; y++) {
+      const f = raw[y * (stride + 1)], row = y * (stride + 1) + 1, out = y * stride
+      for (let x = 0; x < stride; x++) {
+        const a = x >= bpp ? px[out + x - bpp] : 0, b = y ? px[out + x - stride] : 0, c = x >= bpp && y ? px[out + x - stride - bpp] : 0
+        let v = raw[row + x]
+        if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1
+        else if (f === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c }
+        px[out + x] = v & 255
+      }
+    }
+    return { px, bpp }
+  } catch { return null }
+}
+/** Do two thumbnails of the page look different to a person? More than a fifth of a percent of the picture changed by more
+ * than a shade: a panel sliding, a dialog fading in, a view changing — not a caret blinking or a small spinner turning. */
+function looksDifferent(a: { px: Uint8Array; bpp: number }, b: { px: Uint8Array; bpp: number }): boolean {
+  if (a.px.length !== b.px.length || a.bpp !== b.bpp) return true
+  const n = a.px.length / a.bpp, need = Math.max(4, Math.ceil(n * 0.002)); let changed = 0
+  for (let i = 0; i < a.px.length; i += a.bpp) { if (Math.abs(a.px[i] - b.px[i]) > 24 || Math.abs(a.px[i + 1] - b.px[i + 1]) > 24 || Math.abs(a.px[i + 2] - b.px[i + 2]) > 24) { if (++changed >= need) return true } }
+  return false
+}
+const EXTRA = 4000 // ms of frames kept between commands, at most, while the page is still visibly changing
 export const SETTLE = 900 // ms of frames kept after an action, for the page to settle on screen (the viewer sees the result; the agent's thinking after that is cut)
 const SCALE = 2
 const PRESETS: Record<string, [number, number]> = { phone: [390, 844], tablet: [1024, 768], laptop: [1280, 800], desktop: [1440, 900], wide: [1920, 1080] }
@@ -75,6 +105,13 @@ export class Page {
   lastFrame?: Buffer
   private sentAt = 0
   private screencast = false
+  // While recording, a second, tiny view of the page (a thumbnail a few times a second) says whether it looks different from
+  // the last frame the video kept. If it does, frames are kept although no command is running: a cut in the video never
+  // hides a change (a slow response landing, an animation still going while the agent thinks).
+  private eye?: string // the session the thumbnails come on
+  private thumb?: { px: Uint8Array; bpp: number } // the page as it looks now
+  private shown?: { px: Uint8Array; bpp: number } // the page as the video last showed it
+  private changedAt = 0
   private capturing = false // a cropped or whole-page screenshot is being taken: the frames Chrome paints for it are dropped
   private cast: 'record' | 'watch' | null = null // what the screencast is tuned for
   currentUrl = 'about:blank'
@@ -152,6 +189,16 @@ export class Page {
       else if (method === 'Target.targetInfoChanged' && this.popupIds.has(params.targetInfo?.targetId)) this.popup(params.targetInfo)
       return
     }
+    if (sid && sid === this.eye) {
+      if (method === 'Page.screencastFrame') {
+        void this.chrome.send('Page.screencastFrameAck', { sessionId: params.sessionId }, sid).catch(() => {})
+        const t = this.capturing ? null : pngPixels(Buffer.from(params.data, 'base64'))
+        // Different from what the video last showed: the page is changing. (Compared before the reference moves on, so
+        // motion that is being filmed keeps saying so, and the filming carries on until it stops.)
+        if (t) { this.thumb = t; const r = this.rec, now = Date.now(); if (r && this.shown && looksDifferent(t, this.shown)) this.changedAt = now; if (!r || !this.shown || now - r.wrote < 150) this.shown = t }
+      }
+      return
+    }
     if (sid !== this.session) return
     switch (method) {
       case 'Page.screencastFrame': {
@@ -166,7 +213,10 @@ export class Page {
         // Recording: keep the frame (at most ~12 a second). The page only paints when something changed, so a pause
         // in the agent's thinking leaves a gap in the timestamps, not a run of identical frames.
         const r = this.rec
-        if (r && now <= r.until && now - r.wrote >= 30) { r.wrote = now; const file = path.join(r.dir, `f-${String(r.frames.length).padStart(5, '0')}.jpg`); r.frames.push({ file, t: now }); fs.writeFile(file, jpeg, () => {}) }
+        // …and between commands too, while the page looks different from the last frame kept (for EXTRA ms at most in one gap).
+        const moved = !!r && now > r.until && now - this.changedAt < 400 && r.extra < EXTRA
+        if (r && moved) r.extra += Math.min(now - r.wrote, 120)
+        if (r && (now <= r.until || moved) && now - r.wrote >= 30) { r.wrote = now; this.shown = this.thumb; const file = path.join(r.dir, `f-${String(r.frames.length).padStart(5, '0')}.jpg`); r.frames.push({ file, t: now }); fs.writeFile(file, jpeg, () => {}) }
         // Watching: the latest frame to everyone looking, up to ~25 a second (a slow viewer drops frames, see the daemon).
         this.lastFrame = jpeg
         if (this.watchers.size && now - this.sentAt >= 40) { this.sentAt = now; for (const w of this.watchers) w.frame?.(jpeg, this.currentUrl) }
@@ -235,6 +285,17 @@ export class Page {
     this.screencast = false; this.cast = null; await this.cdp('Page.stopScreencast').catch(() => {})
   }
 
+  private async openEye() {
+    try {
+      const { sessionId } = await this.chrome.send<{ sessionId: string }>('Target.attachToTarget', { targetId: this.targetId, flatten: true })
+      this.eye = sessionId; this.thumb = this.shown = undefined; this.changedAt = 0
+      await this.chrome.send('Page.startScreencast', { format: 'png', maxWidth: 96, maxHeight: 60, everyNthFrame: 2 }, sessionId)
+    } catch { this.eye = undefined } // without it the recording is as before: frames while a command runs and for a beat after
+  }
+  private async closeEye() {
+    const sid = this.eye; this.eye = undefined; this.thumb = this.shown = undefined
+    if (sid) await this.chrome.send('Target.detachFromTarget', { sessionId: sid }).catch(() => {})
+  }
   /** If something set a navigation going, wait for the new page (a form's redirect, a followed link) before reading it. */
   async settle(ms = 10_000) {
     if (!this.loading) return
@@ -534,9 +595,13 @@ export class Page {
         const def = KEYS[k] ?? (k.length === 1 ? { key: k, code: /^[a-z]$/i.test(k) ? `Key${k.toUpperCase()}` : /^[0-9]$/.test(k) ? `Digit${k}` : CODES[k] ?? '', vk: /^[a-z0-9]$/i.test(k) ? k.toUpperCase().charCodeAt(0) : 0, text: k } : null)
         if (!def) return { ok: false, text: `unknown key ${k}. Known: ${Object.keys(KEYS).join(', ')}, ${Object.keys(NAMED).join(', ')}, or a single character (cmd++ for the plus key)` }
         const text = modifiers & ~8 ? undefined : def.text
+        // On camera the key is seen before what it does: the keycap comes up, then the key goes in. A key whose effect is
+        // instant (Escape leaving a view) otherwise reads as the page changing by itself.
+        const cap = `key(${JSON.stringify([...parts.map((x) => KEY_GLYPH[x.toLowerCase()] ?? x), KEY_GLYPH[k] ?? k])})`
+        if (this.rec) { this.hud(cap); await sleep(450) }
         await this.cdp('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', key: def.key, code: def.code, windowsVirtualKeyCode: def.vk, nativeVirtualKeyCode: def.vk, text, modifiers, commands: modifiers & 4 && k.length === 1 ? [{ a: 'selectAll', c: 'copy', v: 'paste', x: 'cut', z: 'undo' }[k.toLowerCase() as 'a']].filter(Boolean) : undefined })
         await this.cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: def.key, code: def.code, windowsVirtualKeyCode: def.vk, nativeVirtualKeyCode: def.vk, modifiers })
-        this.hud(`key(${JSON.stringify([...parts.map((x) => KEY_GLYPH[x.toLowerCase()] ?? x), KEY_GLYPH[k] ?? k])})`)
+        if (!this.rec) this.hud(cap)
         await sleep(this.rec ? 700 : 300); await this.settle()
         return { ok: true, text: `pressed ${spec}` }
       }
@@ -780,11 +845,12 @@ export class Page {
       const [rw, rh] = this.fixed ? this.size : [REC_W, REC_H]
       await this.setSize(rw, rh)
       await sleep(400) // let the page lay out at that size before the first frame
-      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, actions: 0, ...opts }
+      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, extra: 0, actions: 0, ...opts }
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
       await this.wantFrames()
+      await this.openEye()
       return { ok: true, text: `recording at ${rw}×${rh} (the clip comes out ${Math.min(2880, rw * SCALE)} pixels wide${opts.title ? `, in a frame titled "${opts.title}"` : ''}) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
     }
     if (what === 'caption') {
@@ -801,6 +867,7 @@ export class Page {
     if (what === 'stop') {
       const r = this.rec; if (!r) return { ok: false, text: 'not recording' }
       this.rec = undefined
+      await this.closeEye()
       await this.evaluate(CAPTION_JS('')).catch(() => {}) // the caption goes with the recording; annotations stay, for a still of the end (`lantern clear`)
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written

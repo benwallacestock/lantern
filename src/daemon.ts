@@ -77,7 +77,7 @@ async function dispatch(req: any): Promise<Reply> {
       if (req.branch && CONFIG.branch !== false) p.branch = req.branch
       const args: string[] = req.args ?? []
       const rolling = RECORDS.has(args[0])
-      if (p.rec && rolling) p.rec.until = Infinity // frames are kept while an action runs…
+      if (p.rec && rolling) { p.rec.until = Infinity; p.rec.extra = 0 } // frames are kept while an action runs…
       try { const r = await p.run(args[0], args.slice(1), req.cwd ?? root); if (r.ok && ACTS.has(args[0])) { p.did(r.text.split('\n')[0].slice(0, 90)); if (p.rec) p.rec.actions++ } if (p.dead) { if (p.rec) { try { fs.rmSync(p.rec.dir, { recursive: true, force: true }) } catch {}; p.rec = undefined; r.text = 'the recording was abandoned: ' + r.text } const note = await relaunch(); return { ...r, text: note + r.text } } return r }
       finally { if (p.rec && rolling) p.rec.until = Date.now() + SETTLE } // …and for a beat after, while the page settles
     }

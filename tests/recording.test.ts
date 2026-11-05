@@ -84,6 +84,25 @@ test('a caption can go along the top, and annotations outlive the recording for 
   assert.equal(await ok('eval', "document.querySelectorAll('.__l-highlight, .__l-glow').length > 0"), 'true', 'the highlight is still there')
   await ok('clear')
 })
+test('a cut never hides a change: the page is filmed while it still looks different, though no command is running', async () => {
+  // The frames kept so far, counted before `record stop` (which films its own beat).
+  const kept = () => { const dir = path.join(proj, 'tmp', 'lantern'); const rec = fs.readdirSync(dir).filter((f) => f.startsWith('rec-')).sort().pop()!; return fs.readdirSync(path.join(dir, rec)).filter((f) => f.endsWith('.jpg')).length }
+  // Something still moving after the command that started it has returned (three seconds of it; a command's own beat is about one).
+  await ok('open', app.url + '/slide'); await ok('record', 'start'); await ok('click', '#go'); await pause(3200)
+  const moving = kept(); await ok('record', 'stop')
+  // The same wait with nothing moving but a small spinner: that is thinking time, and is cut.
+  await ok('open', app.url + '/fade'); await ok('record', 'start'); await ok('hover', '#spin'); await pause(3200)
+  const idle = kept(); await ok('record', 'stop')
+  assert.ok(moving > idle * 1.5, `the whole slide was filmed (${moving} frames), and a spinner turning did not keep the camera rolling (${idle})`)
+})
+test('on camera a key is shown before it does anything, and its keycap stays clear of the caption', async () => {
+  await ok('open', app.url + '/'); await ok('record', 'start'); await ok('record', 'caption', 'Leaving with Escape')
+  await ok('hover', '700,850') // the pointer down by the caption, where the keycap used to hide behind it
+  await ok('eval', `(() => { addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; const k = document.getElementById('__lantern_keys'), c = document.getElementById('__lantern_caption'); const a = k && k.getBoundingClientRect(), b = c.getBoundingClientRect(); window.__seen = !k ? 'no keycap yet' : (a.bottom <= b.top || a.top >= b.bottom || a.right <= b.left || a.left >= b.right) ? 'keycap up, clear of the caption' : 'keycap behind the caption' }, true); return 1 })()`)
+  await ok('press', 'Escape')
+  assert.equal(await ok('eval', 'window.__seen'), 'keycap up, clear of the caption')
+  await ok('record', 'stop')
+})
 test('a titled recording is framed: the video is bigger than the clip', async () => {
   await ok('open', '/')
   assert.match(await ok("record", "start", "--title", "A framed demo", "--note", "TRAIL-1"), /in a frame titled "A framed demo"/)

@@ -64,11 +64,13 @@ export const UI_JS = String.raw`(() => {
   const fx = (x, y, html) => { const d = mk('div', '__l-top __l-transient __l-fx', html); place(d, x + 16, y + 14); return d }
   const fade = (d, after, gone) => { setTimeout(() => { d.style.animation = '__l-fade .35s ease-in both' }, after); setTimeout(() => d.remove(), gone) }
   // The keys bubble sits by the pointer (or along the bottom when there is none) and fades once typing stops.
+  // Below the pointer, unless that runs into the caption along the bottom (or off the page): then above it, where it can be read.
+  const keysTop = (y) => { const c = caption && caption.isConnected ? caption.getBoundingClientRect() : null; const floor = c && c.top > innerHeight / 2 ? c.top - 8 : innerHeight - 12; return y + 52 + 44 <= floor ? y + 52 : Math.max(8, y - 62) }
   const showKeys = () => {
     const at = window.__lantern_at
     if (!keys || !keys.isConnected) keys = mk('div', '__l-top __l-transient __l-dark __l-keys')
     keys.id = '__lantern_keys'
-    if (at) { keys.style.left = Math.min(at.x + 22, innerWidth - 260) + 'px'; keys.style.top = Math.min(at.y + 52, innerHeight - 60) + 'px'; keys.style.bottom = ''; keys.style.transform = '' }
+    if (at) { keys.style.left = Math.min(at.x + 22, innerWidth - 260) + 'px'; keys.style.top = keysTop(at.y) + 'px'; keys.style.bottom = ''; keys.style.transform = '' }
     else { keys.style.left = '50%'; keys.style.transform = 'translateX(-50%)'; keys.style.bottom = '84px'; keys.style.top = '' }
     keys.style.opacity = '1'
     clearTimeout(keysT)
@@ -164,7 +166,7 @@ export const UI_JS = String.raw`(() => {
     caption(text, top) { if (!text) { caption?.remove(); caption = null; return } if (!caption || !caption.isConnected) { caption = mk('div', '__l-top __l-transient __l-dark __l-caption'); caption.id = '__lantern_caption' } caption.textContent = text; caption.classList.toggle('__l-caption-up', !!top) },
     cursor(x, y, ms) {
       window.__lantern_at = { x, y }
-      if (keys && keys.isConnected) { keys.style.transition = 'left ' + ms + 'ms ' + CURVE + ', top ' + ms + 'ms ' + CURVE; keys.style.left = (x + 22) + 'px'; keys.style.top = (y + 52) + 'px' }
+      if (keys && keys.isConnected) { keys.style.transition = 'left ' + ms + 'ms ' + CURVE + ', top ' + ms + 'ms ' + CURVE; keys.style.left = Math.min(x + 22, innerWidth - 260) + 'px'; keys.style.top = keysTop(y) + 'px' }
       if (!cursor || !cursor.isConnected) { cursor = mk('div', '__l-top __l-transient __l-cursor', CURSOR_SVG); cursor.id = '__lantern_cursor'; cursor.style.transform = 'translate(' + (innerWidth / 2) + 'px,' + (innerHeight * 0.8) + 'px)'; cursor.getBoundingClientRect() }
       cursor.style.transition = 'transform ' + ms + 'ms ' + CURVE
       cursor.style.transform = 'translate(' + (x - 5.5) + 'px,' + (y - 3) + 'px)'
