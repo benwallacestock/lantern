@@ -23,7 +23,7 @@ export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
 type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; scroll?: { x: number; y: number } }
 /** A demo being recorded: every frame the page painted, with when it painted. Assembled on stop. */
-type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string }
+type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string; actions: number }
 
 /** ms of recording after a command returns: the page reacting, a transition finishing. */
 export const SETTLE = 900 // ms of frames kept after an action, for the page to settle on screen (the viewer sees the result; the agent's thinking after that is cut)
@@ -733,7 +733,7 @@ export class Page {
       const [rw, rh] = this.fixed ? this.size : [REC_W, REC_H]
       await this.setSize(rw, rh)
       await sleep(400) // let the page lay out at that size before the first frame
-      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, ...opts }
+      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, actions: 0, ...opts }
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
@@ -761,9 +761,11 @@ export class Page {
       const same = cast.length <= 2 && cast.every((f) => { try { return fs.readFileSync(f.file).equals(fs.readFileSync(cast[0].file)) } catch { return false } })
       if (r.frames.length < 2 || same) {
         fs.rmSync(r.dir, { recursive: true, force: true })
-        // Actions that printed success and a page that never changed: the usual cause is a page that stopped taking input.
+        // Actions ran and no frames came: Chrome has stopped painting (or taking input) — a stall seen on heavy pages. Restart
+        // the browser rather than leave the agent to guess; a recording with no actions in it is just that.
         if (!(await this.takesInput())) { this.dead = true; return { ok: false, text: 'nothing was recorded, and the page has stopped taking input — that is why the actions did nothing. The browser is being restarted: record it again' } }
-        return { ok: false, text: 'nothing was recorded: the page never changed while recording (if the actions printed success and the app did not react, `lantern close` then `open`, and record again)' }
+        if (r.actions > 0) { this.dead = true; return { ok: false, text: `nothing was recorded although ${r.actions} action${r.actions === 1 ? '' : 's'} ran: the page has stopped painting. The browser is being restarted: open the page again and record it again` } }
+        return { ok: false, text: 'nothing was recorded: no action ran while recording, so the page never changed' }
       }
       // Each frame shows until the next; a long gap (the agent thinking) is cut to a beat, so the clip is the interactions, not the waiting.
       const GAP = 0.6, MIN = 1 / 30, HOLD = 2.5 // each frame shows for the time until the next: real time, never slowed; a gap (the agent thinking) is cut to a beat
