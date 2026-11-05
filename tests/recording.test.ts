@@ -64,6 +64,14 @@ test('while recording, the page sees the pointer travel: moves along the way, no
   await ok('click', '#b'); assert.ok(Number(await ok('text', '#n')) - plain <= 3, 'not recording: one move, no glide')
 })
 
+test('a scroll sends the page the same wheel events on camera as off it, so a canvas zooms the same in the take as in the rehearsal', async () => {
+  await ok('open', app.url + '/wheel')
+  await ok('scroll', 'down', '300'); const off = Number(await ok('eval', "document.getElementById('n').textContent"))
+  assert.ok(off > 0, 'wheel events arrived')
+  await ok('record', 'start'); await ok('scroll', 'down', '300'); const on = Number(await ok('eval', "document.getElementById('n').textContent")) - off
+  await ok('record', 'stop')
+  assert.equal(on, off)
+})
 test('a titled recording is framed: the video is bigger than the clip', async () => {
   await ok('open', '/')
   assert.match(await ok("record", "start", "--title", "A framed demo", "--note", "TRAIL-1"), /in a frame titled "A framed demo"/)

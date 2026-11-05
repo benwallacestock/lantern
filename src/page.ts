@@ -631,12 +631,14 @@ export class Page {
         await this.moveMouse(at.x, at.y, { settle: 120 })
         // A wheel, not a jump: the distance goes in ticks that ease out, so the page scrolls as it does under a finger.
         this.hud(`wheel(${at.x}, ${at.y}, ${JSON.stringify(dir)})`)
-        const ticks = this.rec ? 14 : 4
+        // The same ticks whether recording or not, only slower on camera: a canvas that zooms a step per wheel event
+        // (a map, a 3D view) must end up where it did in the rehearsal.
+        const ticks = 8
         let done = 0
         for (let i = 1; i <= ticks; i++) {
           const t = i / ticks, target = Math.round(px * (1 - Math.pow(1 - t, 3))), step = target - done; done = target
           if (step) await this.cdp('Input.dispatchMouseEvent', { type: 'mouseWheel', x: at.x, y: at.y, deltaX: d[0] * step, deltaY: d[1] * step })
-          await sleep(this.rec ? 32 : 10)
+          await sleep(this.rec ? 56 : 10)
         }
         await sleep(this.rec ? 400 : 200)
         return { ok: true, text: `scrolled ${dir} ${px}px over ${at.name}` }
