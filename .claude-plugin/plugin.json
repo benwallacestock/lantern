@@ -1,7 +1,7 @@
 {
   "name": "lantern",
   "description": "The lantern CLI, a browser for coding agents, and the skills that teach Claude to use it: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer.",
-  "version": "0.10.1",
+  "version": "1.0.0",
   "author": {
     "name": "Spruce"
   },

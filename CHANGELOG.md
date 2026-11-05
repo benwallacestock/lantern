@@ -2,6 +2,20 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/): since 1.0 the commands, flags and settings only change in a major version (before it, a minor bump could change behaviour). Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 1.0.0 — 2026-11-05
+
+### Added
+- Lantern 1.0: the commands, flags and settings are now a promise
+  - From here a command, flag or setting that people rely on only changes or goes in a major version; new things arrive in minor versions and fixes in patches, as before.
+  - Fresh agents working only from the skills now get through a hard page (drawing on a 3D canvas, a demo video and a framed picture) in one take, which was the bar for calling it 1.0.
+
+### Fixed
+- Lantern says when something is lying over what you marked, or when its words cover the page
+  - An agent cannot see the page, so a tip, a popover or a banner on top of the thing it is pointing at ruined the picture without any command failing. `callout`, `highlight`, `ring`, `arrow`, `badge` and `screenshot <target>` now check how much of the target can be seen and reply with a ⚠ line naming what is on top of it and how much it hides.
+  - `callout` and `record caption` say when their own words lie over text on the page, and how to move them.
+  - `hover` on a spot no longer suggests a snapshot.
+  - The skills tell the agent to read these lines and to look at one plain screenshot before recording.
+
 ## 0.10.1 — 2026-11-05
 
 ### Fixed
