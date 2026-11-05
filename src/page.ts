@@ -13,7 +13,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Chrome } from './cdp.ts'
 import { BLUE, FOCUS_JS, KEYS, KEY_GLYPH, ORANGE, SNAPSHOT_JS, locateJs } from './pageScripts.ts'
-import { ACCENT_JS, ANNOTATE_JS, ANNOTATIONS, CAPTION_JS, CLEAR_JS, CLICK_JS, CURSOR_JS, FX_JS, HUD_JS, REMOVE_JS, WITHOUT_OVERLAYS, type Annotation } from './overlay.ts'
+import { ACCENT_JS, ANCHOR_JS, ANNOTATE_JS, ANNOTATIONS, CAPTION_JS, CLEAR_JS, CLICK_JS, CURSOR_JS, FX_JS, HUD_JS, REMOVE_JS, WITHOUT_OVERLAYS, type Annotation } from './overlay.ts'
 import { USAGE } from './usage.ts'
 import { encodeInChrome } from './encode.ts'
 import { FRAME_BG, videoFrame } from './videoFrame.ts'
@@ -383,6 +383,15 @@ export class Page {
   /** The element the last locate found, as a remote object — for CDP calls that take a node (file inputs). */
   async lastObject() { return (await this.cdp<{ result: { objectId?: string } }>('Runtime.evaluate', { expression: 'window.__lantern && window.__lantern.last' })).result.objectId }
   private async locate(target: string) {
+    // A place rather than an element — x,y or x,y,w,h in viewport pixels, for what is drawn on a canvas: a see-through
+    // box is stood there for the annotation to go on.
+    const at0 = /^(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)(?:,(\d+(?:\.\d+)?),(\d+(?:\.\d+)?))?$/.exec(target.trim())
+    if (at0) {
+      const [x, y, w, h] = at0.slice(1).map((v) => (v === undefined ? undefined : Number(v)))
+      const rect = w !== undefined && h !== undefined ? { x: x!, y: y!, width: w, height: h } : { x: x! - 14, y: y! - 14, width: 28, height: 28 }
+      await this.evaluate(ANCHOR_JS(rect.x, rect.y, rect.width, rect.height))
+      return { rect, name: w !== undefined ? `the region ${target.trim()}` : `the spot ${target.trim()}`, scroll: { x: 0, y: 0 }, matches: 1 }
+    }
     const at = await this.evaluate<Spot & { error?: string }>(locateJs(target))
     if (at.error || !at.rect) throw new Error(at.error ?? 'could not find that')
     await sleep(150) // it was scrolled into view; locate again so the box starts where it is
@@ -543,7 +552,7 @@ export class Page {
       }
       // ---- annotations: drawn on the page, in screenshots and recordings, following their element until it goes or `clear`
       case 'highlight': {
-        if (!rest[0]) return { ok: false, text: 'highlight what? a ref, text=Label, a selector — or off' }
+        if (!rest[0]) return { ok: false, text: 'highlight what? a ref, text=Label, a selector, or x,y,w,h for a region of a canvas — or off' }
         if (rest[0] === 'off') { this.hl = false; this.marks = this.marks.filter((m) => m.kind !== 'highlight'); await this.evaluate(CLEAR_JS('highlight')).catch(() => {}); return { ok: true, text: 'highlight off' } }
         const { rect: r, name, matches } = await this.locate(rest.join(' '))
         await this.evaluate(ANNOTATE_JS('highlight')).catch(() => {}); this.hl = true; this.marks.push({ kind: 'highlight', target: rest.join(' ') })
@@ -575,7 +584,7 @@ export class Page {
       case 'ring': case 'arrow': case 'blur': {
         // ring <target>: a ring around something small (an icon, a toggle) · arrow <target>: a bold arrow pointing at it
         // · blur <target>: the element blurred out, for a name or a number that must not be in the picture
-        if (!rest[0]) return { ok: false, text: `${sub} what? a ref, text=Label, a selector` }
+        if (!rest[0]) return { ok: false, text: `${sub} what? a ref, text=Label, a selector, or x,y (x,y,w,h for a region) for something on a canvas` }
         const { rect: r, name, matches } = await this.locate(rest.join(' '))
         await this.evaluate(ANNOTATE_JS(sub as Annotation)).catch(() => {}); this.marks.push({ kind: sub as Annotation, target: rest.join(' ') })
         await this.pointerClear(r)

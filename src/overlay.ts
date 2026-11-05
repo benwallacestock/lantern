@@ -87,7 +87,7 @@ export const UI_JS = String.raw`(() => {
     if (!hidden) a.layout(r)
   }
   const tick = () => { for (const a of [...anns.values()]) settle(a); raf = anns.size ? requestAnimationFrame(tick) : 0 }
-  const drop = (a) => { for (const n of a.nodes) n.remove(); anns.delete(a.id) }
+  const drop = (a) => { for (const n of a.nodes) n.remove(); anns.delete(a.id); if (a.el && a.el.classList && a.el.classList.contains('__l-anchor')) a.el.remove() }
   const keep = (a) => { a.id = nextId++; anns.set(a.id, a); for (const n of a.nodes) n.dataset.lantern = a.id; settle(a); if (!raf && anns.size) raf = requestAnimationFrame(tick); return a.id }
   const glowBox = (box, r) => place(box, r.left - PAD, r.top - PAD, r.width + 2 * PAD, r.height + 2 * PAD)
 
@@ -99,7 +99,7 @@ export const UI_JS = String.raw`(() => {
     },
     // A numbered disc just outside the element's top-left corner, so it covers none of the element's own words (a short
     // button's label starts right at that corner); on the corner itself when there is no room outside.
-    badge: (el, o) => { const b = mk('div', '__l-top __l-badge', esc(o.n)); return { el, nodes: [b], layout: (r) => place(b, r.left >= 30 ? r.left - 28 : r.left - 13, r.top >= 30 ? r.top - 28 : r.top - 13) } },
+    badge: (el, o) => { const b = mk('div', '__l-top __l-badge', esc(o.n)); return { el, nodes: [b], layout: (r) => { if (el.classList.contains('__l-anchor') && r.width <= 28) place(b, r.left + r.width / 2 - b.offsetWidth / 2, r.top + r.height / 2 - b.offsetHeight / 2); else place(b, r.left >= 30 ? r.left - 28 : r.left - 13, r.top >= 30 ? r.top - 28 : r.top - 13) } } }, // on a spot (a canvas): the disc sits on it
     blur: (el) => { const b = mk('div', '__l-blur'); return { el, nodes: [b], layout: (r) => place(b, Math.round(r.left) - 2, Math.round(r.top) - 2, Math.round(r.width) + 4, Math.round(r.height) + 4) } },
     arrow: (el) => {
       // A bold arrow pointing at the element from the side with the most room, a white halo under it for contrast.
@@ -182,6 +182,9 @@ export const UI_JS = String.raw`(() => {
       const d = fx(x, y, MOUSE('', '') + '<div style="position:absolute;left:0;top:0;width:22px;height:30px;overflow:hidden"><div style="position:absolute;left:0;right:0;top:14px;text-align:center;color:' + ACCENT + ';font:900 16px/1 ' + FONT + ';animation:' + (up ? '__l-wheelup' : '__l-wheel') + ' .55s linear infinite' + (horiz ? ';transform:rotate(-90deg)' : '') + '">' + (horiz ? (dir === 'left' ? '⌃⌃' : '⌄⌄') : (up ? '⌃' : '⌄')) + '</div></div>')
       fade(d, 1100, 1500)
     },
+    /** A see-through box at a place on the screen, standing in for an element where there is none (a spot on a canvas):
+     * the next annotation goes on it, and it goes when that annotation does. */
+    anchor(x, y, w, h) { const el = mk('div', '__l-anchor'); place(el, x, y, w, h); window.__lantern = window.__lantern || { refs: new Map() }; window.__lantern.last = el; return true },
     /** An annotation on the element the last locate found; its id, or 0 when there is none. */
     add(kind, opts) { const el = window.__lantern && window.__lantern.last; if (!el || !kinds[kind]) return 0; const a = kinds[kind](el, opts || {}); a.kind = kind; return keep(a) },
     remove(id) { const a = anns.get(id); if (a) drop(a) },
@@ -205,6 +208,8 @@ export const HUD_JS = (expr: string) => call(expr)
 export type Annotation = 'highlight' | 'callout' | 'badge' | 'ring' | 'arrow' | 'blur'
 export const ANNOTATIONS: Annotation[] = ['highlight', 'callout', 'badge', 'ring', 'arrow', 'blur']
 /** An annotation on the element the last locate found; evaluates to its id (0 when there was no element). */
+/** Stand a see-through box at x,y (w×h, viewport pixels) for the next annotation to go on. */
+export const ANCHOR_JS = (x: number, y: number, w: number, h: number) => call(`anchor(${x}, ${y}, ${w}, ${h})`)
 export const ANNOTATE_JS = (kind: Annotation, opts: { text?: string; n?: number } = {}) => call(`add(${JSON.stringify(kind)}, ${JSON.stringify(opts)})`)
 export const REMOVE_JS = (id: number) => call(`remove(${id})`)
 /** Every annotation, or every one of a kind, off. */

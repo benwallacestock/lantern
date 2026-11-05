@@ -23,6 +23,7 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern callout <target> <words>   the words beside the element, joined to it by a line, the element lit; "callout 2 <target> <words>" numbers it; callout off ends it
   lantern badge <n> <target>    a numbered disc on the element's corner: the steps of a still, in order
   lantern ring <target> · arrow <target> · blur <target>   a ring around something small; a bold arrow pointing at it; the element blurred out (a name, a number)
+                              a target can also be a place, for what is drawn on a canvas: x,y (a spot) or x,y,w,h (a region), in viewport pixels
   lantern clear [kind]          every annotation off (or one kind: highlight, callout, badge, ring, arrow, blur); they follow their element and go when it does
   lantern frame <shot.png> [after.png …] --title "what it shows" [--captions "Before|After"] [--note "ABC-123"] [--footer "…"] [--out f.png] [--side|--stack]
                               one PNG, framed for a pull request: one picture, a before/after pair, or numbered steps
