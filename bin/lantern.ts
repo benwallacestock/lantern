@@ -83,6 +83,10 @@ async function retireOld() {
   if (was === buildId()) return
   let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}
   if (!pid || !alive(pid)) return // nothing running; a running daemon with no build file (from before this check existed) is old too
+  // Not under an agent that is mid-task: a daemon in use (or recording) keeps going on its old code, and is restarted
+  // once it has been idle for five minutes. A daemon too old to answer the question is restarted now, as before.
+  const idle = await connect({ cmd: 'idle' })
+  if (idle?.ok) { try { const s = JSON.parse(idle.text); if (s.recording || s.idleMs < (Number(process.env.LANTERN_RETIRE_IDLE_MS ?? '') || (process.env.LANTERN_RETIRE_IDLE_MS === '0' ? 0 : 5 * 60_000))) return } catch {} }
   process.stderr.write(`lantern was updated to ${version()}; restarting its browser\n`)
   await connect({ cmd: 'close' })
   for (let i = 0; i < 40 && pid && alive(pid); i++) await sleep(250)

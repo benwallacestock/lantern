@@ -130,6 +130,8 @@ export class Page {
   fire(js: string) { void this.evaluate(js).catch(() => {}) }
   hud(call: string) { this.fire(HUD_JS(call)) }
   note(line: string) { this.log.push(`${new Date().toISOString().slice(11, 19)} ${line}`); if (this.log.length > 300) this.log.splice(0, this.log.length - 300) }
+  /** Where the page is now, kept so a restarted browser comes back to it (an app's own route changes included). */
+  private remember(url: string) { if (/^https?:/.test(url) && url !== this.lastUrl) { this.lastUrl = url; this.saveState() } }
   private saveState() { if (!this.stateFile) return; try { fs.mkdirSync(path.dirname(this.stateFile), { recursive: true }); fs.writeFileSync(this.stateFile, JSON.stringify({ base: this.base, url: this.lastUrl })) } catch {} }
 
   private event(sid: string | undefined, method: string, params: any) {
@@ -167,9 +169,9 @@ export class Page {
         break
       }
       case 'Page.frameStartedLoading': if (params.frameId === this.mainFrame) this.loading = true; break
-      case 'Page.frameNavigated': if (!params.frame?.parentId) { this.mainFrame = params.frame.id; this.currentUrl = params.frame.url; this.navigated = true } break
+      case 'Page.frameNavigated': if (!params.frame?.parentId) { this.mainFrame = params.frame.id; this.currentUrl = params.frame.url; this.navigated = true; this.remember(params.frame.url) } break
       case 'Page.loadEventFired': this.loading = false; this.onLoad?.(); this.onLoad = undefined; this.afterLoad(); break
-      case 'Page.navigatedWithinDocument': if (params.frameId === this.mainFrame && params.url) this.currentUrl = params.url; this.loading = false; this.onLoad?.(); this.onLoad = undefined; break // a pushState navigation (a single-page app's router) moves the URL too, and the watchers show it
+      case 'Page.navigatedWithinDocument': if (params.frameId === this.mainFrame && params.url) { this.currentUrl = params.url; this.remember(params.url) } this.loading = false; this.onLoad?.(); this.onLoad = undefined; break // a pushState navigation (a single-page app's router) moves the URL too, and the watchers show it
       // Nobody is there to answer a dialog, and an unanswered one cancels whatever caused it (a navigation, say).
       case 'Page.javascriptDialogOpening': void this.cdp('Page.handleJavaScriptDialog', { accept: true }).catch(() => {}); this.note(params.type === 'beforeunload' ? 'beforeunload: the page asked before leaving; left anyway' : `${params.type}: ${String(params.message).slice(0, 300)} (accepted)`); break
       case 'Runtime.consoleAPICalled': if (params.type === 'warning' || params.type === 'error') this.note(`console.${params.type === 'warning' ? 'warn' : 'error'}: ${(params.args ?? []).map((a: any) => a.value ?? a.description ?? '').join(' ').slice(0, 500)}`); break
@@ -573,7 +575,8 @@ export class Page {
         if (dir === 'top' || dir === 'bottom') {
           const [cw, ch] = this.size
           if (this.rec) { await this.moveMouse(cw / 2, ch / 2, { settle: 120 }); this.hud(`wheel(${cw / 2}, ${ch / 2}, ${JSON.stringify(dir === 'top' ? 'up' : 'down')})`) }
-          await this.evaluate(`window.scrollTo({ top: ${dir === 'top' ? 0 : 'document.documentElement.scrollHeight'}, behavior: ${this.rec ? "'smooth'" : "'instant'"} })`)
+          // The window when it scrolls; otherwise the app's own scrolling container (the biggest one), as in a layout with a fixed shell.
+          await this.evaluate(`(() => { const se = document.scrollingElement || document.documentElement; let t = se.scrollHeight > se.clientHeight + 1 ? se : null; if (!t) { let best = 0; for (const e of document.querySelectorAll('*')) { if (e.scrollHeight - e.clientHeight <= 1 || !/(auto|scroll)/.test(getComputedStyle(e).overflowY)) continue; const area = e.clientHeight * e.clientWidth; if (area > best) { best = area; t = e } } } if (t) t.scrollTo({ top: ${dir === 'top' ? 0 : 't.scrollHeight'}, behavior: ${this.rec ? "'smooth'" : "'instant'"} }) })()`)
           await sleep(this.rec ? 900 : 150)
           return { ok: true, text: `scrolled to the ${dir}` }
         }
@@ -684,7 +687,7 @@ export class Page {
       case 'wait': {
         const a = rest.join(' ')
         if (/^\d+$/.test(a)) { const ms = Math.min(Number(a), 30_000); await sleep(ms); return { ok: true, text: `waited ${ms}ms${ms < Number(a) ? ' (the most one wait can be)' : ''}` } }
-        for (let i = 0; i < 40; i++) { if (await this.evaluate<boolean>(WITHOUT_OVERLAYS(`document.body.innerText.includes(${JSON.stringify(a)})`))) return { ok: true, text: `"${a}" is on the page` }; await sleep(250) }
+        for (let i = 0; i < 40; i++) { if (await this.evaluate<boolean>(WITHOUT_OVERLAYS(`document.body.innerText.includes(${JSON.stringify(a)}) || [...document.querySelectorAll('input, textarea')].some((e) => (e.value || '').includes(${JSON.stringify(a)}) || (e.placeholder || '').includes(${JSON.stringify(a)}))`))) return { ok: true, text: `"${a}" is on the page` }; await sleep(250) }
         return { ok: false, text: `"${a}" did not appear within 10s` }
       }
       case 'eval': {

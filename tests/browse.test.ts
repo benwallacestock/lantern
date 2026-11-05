@@ -190,6 +190,15 @@ test('a card below the fold of a smoothly scrolling drawer is clicked where it e
   assert.equal(await ok('text', '#picked2'), 'Card 3')
 })
 
+test('wait sees text typed into a field; scroll bottom and top move an inner scrolling container', async () => {
+  await ok('open', '/'); await ok('fill', '#name', 'Ridge loop at dawn')
+  assert.match(await ok('wait', 'Ridge loop at dawn'), /is on the page/) // in the field's value, not the page's text
+  assert.match(await ok('wait', 'Walk name'), /is on the page/) // a placeholder
+  await ok('open', '/smooth')
+  await ok('scroll', 'bottom'); assert.ok(Number(await ok('eval', 'document.getElementById("drawer").scrollTop')) > 100, 'the drawer scrolled, since the window has nowhere to go')
+  await ok('scroll', 'top'); assert.equal(await ok('eval', 'document.getElementById("drawer").scrollTop'), '0')
+})
+
 test('a modifier click: --shift, --alt, --ctrl, --cmd ahead of the target', async () => {
   await ok('open', '/mods')
   await ok('click', '#mod'); assert.equal(await ok('text', '#held'), 'none')

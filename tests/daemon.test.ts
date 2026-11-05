@@ -101,12 +101,14 @@ test('idle exit: a watch tab left open does not keep the daemon alive', async ()
 test('an updated lantern restarts the daemon of the old one, page and all', async () => {
   const proj2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lantern-upd-'))
   await sh('git', ['-C', proj2, 'init', '-q'])
-  const run = (...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  const runWith = (env: Record<string, string>, ...args: string[]) => new Promise<Run>((res) => execFile(process.execPath, [BIN, ...args], { cwd: proj2, env: { ...process.env, LANTERN_HOME: home, ...env }, timeout: 60_000 }, (e, so, se) => res({ ok: !e, out: (so + se).trim() })))
+  const run = (...args: string[]) => runWith({ LANTERN_RETIRE_IDLE_MS: '0' }, ...args) // restart at once, as when the daemon has been idle
   try {
     const r = await run('open', app.url + '/about'); assert.ok(r.ok, r.out)
     const before = Number(/pid (\d+)/.exec((await run('status')).out)?.[1]); assert.ok(before)
     const build = fs.readdirSync(path.join(home, 'run')).find((f) => f.endsWith('.build') && fs.readFileSync(path.join(home, 'run', f), 'utf8') === fs.readFileSync(path.join(home, 'run', f), 'utf8') && fs.existsSync(path.join(home, 'run', f.replace('.build', '.pid'))) && Number(fs.readFileSync(path.join(home, 'run', f.replace('.build', '.pid')), 'utf8')) === before)!
     fs.writeFileSync(path.join(home, 'run', build), '0.0.1@1') // as if that daemon came from an earlier install
+    const busy = await runWith({}, 'status'); assert.doesNotMatch(busy.out, /restarting/, 'a daemon in use is left alone: no restart under an agent mid-task'); assert.match(busy.out, new RegExp(`pid ${before}`))
     const s = await run('status'); assert.ok(s.ok, s.out)
     assert.match(s.out, /lantern was updated to \d+\.\d+\.\d+; restarting its browser/)
     const after = Number(/pid (\d+)/.exec(s.out)?.[1]); assert.ok(after && after !== before, `a new daemon (${before} → ${after})`)

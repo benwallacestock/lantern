@@ -206,6 +206,7 @@ async function main() {
       try { req = JSON.parse(line) } catch {}
       const done = (r: Reply) => { try { conn.end(JSON.stringify(r) + '\n') } catch {} }
       if (!req) return done({ ok: false, text: 'lantern could not read that request' })
+      if (req.cmd === 'idle') { done({ ok: true, text: JSON.stringify({ idleMs: Date.now() - used, recording: !!page?.rec }) }); return } // asked by a newer CLI deciding whether to restart us
       if (req.cmd === 'watch') { used = Date.now(); void watch(conn).catch((e) => done({ ok: false, text: String(e?.message ?? e) })); return }
       handle(req).then(done)
     })
