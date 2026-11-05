@@ -2,7 +2,7 @@
 <h1 align="center">lantern</h1>
 <p align="center"><b>Let your agent see in the dark.</b><br>A command-line browser for coding agents.</p>
 
-> **Written by an AI.** All of lantern was written by Claude, with human direction. It has an end-to-end test suite and is used every day, but it is young: point it only at your own app and sites you control, and treat what it produces as a draft a person checks before it goes anywhere.
+> **Written by an AI.** All of lantern was written by Claude, with human direction. It has an end-to-end test suite and is used every day, but it is young: point it only at your own app and sites you control.
 
 ## Install
 
