@@ -6,7 +6,7 @@
 
 ## Why
 
-Coding agents live in the terminal, and plenty of them never get a window: a CI job, a cloud session, a bot on a server. lantern gives them a browser they can run like any other command.
+A command line is the best thing you can hand an agent: nothing to install into an editor, no extension, no window to keep open, just commands it already knows how to run. lantern is a browser built that way. It also means it works where there is no window at all: a CI job, a cloud session, a bot on a server.
 
 That buys three things, in the order they tend to matter:
 
