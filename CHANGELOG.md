@@ -2,6 +2,25 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.10.1 — 2026-11-05
+
+### Fixed
+- A video never cuts over a change, and a key is shown before it does anything
+  - Frames were kept only while a command ran and for a beat after, so anything still changing once the agent went quiet (an animation, a slow response landing) was cut and showed as a jump. While recording, lantern now watches a small thumbnail of the page and keeps filming whenever it looks different from the last frame the video kept, for up to four seconds between commands. A caret blinking or a small spinner turning is not a change, so thinking time is still cut.
+  - On camera, `press` shows the keycap first and sends the key a beat later; a key whose effect is instant (Escape leaving a view) used to look like the page changing by itself.
+  - The keycap goes above the pointer when it would otherwise sit behind the caption or off the page.
+- A click stays on the button it found when a tooltip appears, marks outlive a recording, and callouts and captions can be placed
+  - A click measured its target again once the pointer arrived by looking for the words again; a tooltip the pointer had just raised, reading the same as an icon button's label, was found instead, and the click went to whatever was under the tooltip. It now measures the element it first found.
+  - Annotations stay on the page after `record stop`, as the skill said, so a still of the end can be taken with them; the reply says how many are left up.
+  - `callout … --left|--right|--above|--below` puts the words on that side, for a canvas where lantern can't see what they would cover.
+  - `record caption --top …` puts the caption along the top, clear of an app's toolbar at the bottom.
+  - A button with no name is reported by what it is beside ("unnamed button by Northwest Roof 1"), not just "button".
+  - The demo-video skill covers budgeting a clip's length, running a take as one script, and these options.
+- Watch: the watch page says why lantern closed, instead of always blaming a quiet spell
+  - A watcher is told the reason before the line drops: closed with `lantern close`, closed itself after so many minutes without a command, restarted on a newer version, or its browser exited. The live page shows it, and a watcher on the socket gets a {closed} line.
+- Watch: the watch page has lantern's icon in its tab
+  - The live view (`lantern watch`, and `watch --all`) carries the lantern mark as its favicon, in the accent colour, so the tab is easy to find among others.
+
 ## 0.10.0 — 2026-11-05
 
 ### Added
