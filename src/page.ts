@@ -22,7 +22,7 @@ import { hostAllowed, type Config } from './config.ts'
 
 export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
-type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; scroll?: { x: number; y: number } }
+type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; blocked?: { part: number; by: string } | null; scroll?: { x: number; y: number } }
 /** A demo being recorded: every frame the page painted, with when it painted. Assembled on stop. */
 type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; captionTop?: boolean; marks: number[]; wrote: number; until: number; extra: number; title?: string; note?: string; footer?: string; actions: number }
 
@@ -366,6 +366,19 @@ export class Page {
     await this.moveMouse(r.x + r.width + 48 <= w ? r.x + r.width + 48 : Math.max(12, r.x - 48), Math.min(h - 12, r.y + r.height + 36), { settle: 300 })
   }
   /** "3 elements read that": said when a text= target was ambiguous. */
+  /** Said after marking or picturing something that can only partly be seen: the agent cannot see the page, and a tip or
+   * a popover lying over what it is pointing at ruins the picture without any command failing. */
+  private hidden(b?: { part: number; by: string } | null) {
+    if (!b || b.part < 0.12) return ''
+    return `\n⚠ ${b.part > 0.85 ? 'it is hidden' : `about ${b.part > 0.6 ? 'three quarters' : b.part > 0.4 ? 'half' : b.part > 0.2 ? 'a third' : 'a fifth'} of it is hidden`} behind "${b.by}", which is on top of it: whoever looks at the picture will not see it. Close or dismiss that first (\`lantern snapshot\` to find how), then mark it again.`
+  }
+  /** What the words lantern has put on the page (a callout's label, the caption) are lying over, if anything that reads:
+   * said so the agent, who cannot see the page, can move them. */
+  private async under(sel: string, fix: string): Promise<string> {
+    await sleep(120)
+    const t = await this.evaluate<string>(`(() => { const l = [...document.querySelectorAll(${JSON.stringify(sel)})].pop(); if (!l) return ''; const r = l.getBoundingClientRect(), seen = new Set(); for (const fx of [.08, .3, .5, .7, .92]) for (const fy of [.25, .75]) { const e = document.elementsFromPoint(r.left + r.width * fx, r.top + r.height * fy).find((e) => !e.closest('.__lantern')); if (!e || e === document.body || e === document.documentElement) continue; let p = e, t = ''; for (let i = 0; i < 3 && p && !t; i++, p = p.parentElement) { const x = (p.innerText || '').replace(/\\s+/g, ' ').trim(); if (x && x.length <= 48) t = x } if (t) seen.add(t) } return [...seen].slice(0, 3).join('", "') })()`).catch(() => '')
+    return t ? `\n⚠ the words lie over "${t}" on the page: ${fix}` : ''
+  }
   private several(at: Spot) { return at.matches && at.matches > 1 ? ` (${at.matches} elements read that; the first that looked pressable was used — a selector picks another)` : '' }
   /** Move the mouse there, for the recording's pointer and the page itself. */
   async moveMouse(x: number, y: number, opts: { buttons?: number; settle?: number } = {}) {
@@ -451,13 +464,13 @@ export class Page {
       const [x, y, w, h] = at0.slice(1).map((v) => (v === undefined ? undefined : Number(v)))
       const rect = w !== undefined && h !== undefined ? { x: x!, y: y!, width: w, height: h } : { x: x! - 14, y: y! - 14, width: 28, height: 28 }
       await this.evaluate(ANCHOR_JS(rect.x, rect.y, rect.width, rect.height))
-      return { rect, name: w !== undefined ? `the region ${target.trim()}` : `the spot ${target.trim()}`, scroll: { x: 0, y: 0 }, matches: 1 }
+      return { rect, name: w !== undefined ? `the region ${target.trim()}` : `the spot ${target.trim()}`, scroll: { x: 0, y: 0 }, matches: 1, blocked: null }
     }
     const at = await this.evaluate<Spot & { error?: string }>(locateJs(target))
     if (at.error || !at.rect) throw new Error(at.error ?? 'could not find that')
     await sleep(150) // it was scrolled into view; locate again so the box starts where it is
     const again = await this.evaluate<Spot & { error?: string }>(locateJs(target, true, true))
-    return { rect: again.rect ?? at.rect, name: at.name ?? '', scroll: again.scroll ?? at.scroll ?? { x: 0, y: 0 }, matches: at.matches }
+    return { rect: again.rect ?? at.rect, name: at.name ?? '', scroll: again.scroll ?? at.scroll ?? { x: 0, y: 0 }, matches: at.matches, blocked: again.blocked ?? null }
   }
   /** What the last-located element is, for commands that need a field. */
   private kind() { return this.evaluate<{ tag: string; type: string; editable: boolean; multiple: boolean } | null>(`(() => { let el = window.__lantern && window.__lantern.last; if (!el) return null; if (el.tagName === 'LABEL' && el.control) { el = el.control; window.__lantern.last = el } return { tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') || 'text').toLowerCase(), editable: !!el.isContentEditable, multiple: !!el.multiple } })()`) }
@@ -619,10 +632,10 @@ export class Page {
       case 'highlight': {
         if (!rest[0]) return { ok: false, text: 'highlight what? a ref, text=Label, a selector, or x,y,w,h for a region of a canvas — or off' }
         if (rest[0] === 'off') { this.hl = false; this.marks = this.marks.filter((m) => m.kind !== 'highlight'); await this.evaluate(CLEAR_JS('highlight')).catch(() => {}); return { ok: true, text: 'highlight off' } }
-        const { rect: r, name, matches } = await this.locate(rest.join(' '))
+        const { rect: r, name, matches, blocked } = await this.locate(rest.join(' '))
         await this.evaluate(ANNOTATE_JS('highlight')).catch(() => {}); this.hl = true; this.marks.push({ kind: 'highlight', target: rest.join(' ') })
         await this.pointerClear(r)
-        return { ok: true, text: `highlighting "${name}"${this.several({ x: 0, y: 0, name, matches })} — it glows in screenshots and the recording, follows the element and goes when it does; \`lantern highlight off\` ends it` }
+        return { ok: true, text: `highlighting "${name}"${this.several({ x: 0, y: 0, name, matches })} — it glows in screenshots and the recording, follows the element and goes when it does; \`lantern highlight off\` ends it${this.hidden(blocked)}` }
       }
       case 'callout': {
         // callout <target> <words> · callout 2 <target> <words> (numbered) · callout off
@@ -632,30 +645,30 @@ export class Page {
         for (const s of ['left', 'right', 'above', 'below']) { const i = rest.indexOf('--' + s); if (i >= 0) { side = s; rest.splice(i, 1) } }
         if (/^\d{1,2}$/.test(rest[0]) && rest.length > 2) { n = Number(rest.shift()) }
         if (rest.length < 2) return { ok: false, text: 'callout needs the words: `lantern callout <target> <what to say about it>`' }
-        const { rect: r, name } = await this.locate(rest[0])
+        const { rect: r, name, blocked } = await this.locate(rest[0])
         const words = rest.slice(1).join(' ')
         await this.evaluate(ANNOTATE_JS('callout', { text: words, n, side })).catch(() => {}); this.co = true; this.marks.push({ kind: 'callout', target: rest[0], opts: { text: words, n, side } })
         await this.pointerClear(r)
-        return { ok: true, text: `callout${n != null ? ` ${n}` : ''} on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
+        return { ok: true, text: `callout${n != null ? ` ${n}` : ''} on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it${this.hidden(blocked)}${await this.under('.__l-callout-label', 'put them on another side with --left, --right, --above or --below.')}` }
       }
       case 'badge': {
         // badge <n> <target>: a numbered disc on the element's corner — the steps of a still, in order
         if (rest.length < 2 || !/^\d{1,2}$/.test(rest[0])) return { ok: false, text: 'usage: lantern badge <n> <target> — a numbered disc on the element; `lantern clear badge` takes them off' }
         const n = Number(rest[0])
-        const { rect: r, name, matches } = await this.locate(rest.slice(1).join(' '))
+        const { rect: r, name, matches, blocked } = await this.locate(rest.slice(1).join(' '))
         await this.evaluate(ANNOTATE_JS('badge', { n })).catch(() => {}); this.marks.push({ kind: 'badge', target: rest.slice(1).join(' '), opts: { n } })
         await this.pointerClear(r)
-        return { ok: true, text: `badge ${n} on "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear badge\` takes the badges off, \`lantern clear\` everything` }
+        return { ok: true, text: `badge ${n} on "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear badge\` takes the badges off, \`lantern clear\` everything${this.hidden(blocked)}` }
       }
       case 'ring': case 'arrow': case 'blur': {
         // ring <target>: a ring around something small (an icon, a toggle) · arrow <target>: a bold arrow pointing at it
         // · blur <target>: the element blurred out, for a name or a number that must not be in the picture
         if (!rest[0]) return { ok: false, text: `${sub} what? a ref, text=Label, a selector, or x,y (x,y,w,h for a region) for something on a canvas` }
-        const { rect: r, name, matches } = await this.locate(rest.join(' '))
+        const { rect: r, name, matches, blocked } = await this.locate(rest.join(' '))
         await this.evaluate(ANNOTATE_JS(sub as Annotation)).catch(() => {}); this.marks.push({ kind: sub as Annotation, target: rest.join(' ') })
         await this.pointerClear(r)
         const what = sub === 'ring' ? 'a ring around' : sub === 'arrow' ? 'an arrow pointing at' : 'a blur over'
-        return { ok: true, text: `${what} "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear ${sub}\` takes it off, \`lantern clear\` everything` }
+        return { ok: true, text: `${what} "${name}"${this.several({ x: 0, y: 0, name, matches })} — in screenshots and the recording, following the element; \`lantern clear ${sub}\` takes it off, \`lantern clear\` everything${sub === 'blur' ? '' : this.hidden(blocked)}` }
       }
       case 'clear': {
         const kind = rest[0] as Annotation | undefined
@@ -670,7 +683,7 @@ export class Page {
         if (!rest[0]) return { ok: false, text: 'hover what? a ref, text=Label, a selector, or x,y' }
         const at = await this.spot(rest.join(' '))
         await this.moveMouse(at.x, at.y, { settle: 400 })
-        return { ok: true, text: `hovering over "${at.name}"${this.several(at)} — snapshot to see what that revealed` }
+        return { ok: true, text: `hovering over "${at.name}"${this.several(at)}${/^-?\d+,-?\d+$/.test(at.name) ? '' : ' — snapshot to see what that revealed'}` }
       }
       case 'drag': {
         if (rest.length < 2) return { ok: false, text: 'usage: lantern drag <from> <to> — each a ref, text=Label, a selector, or x,y' }
@@ -862,7 +875,7 @@ export class Page {
       this.rec.caption = text === 'off' ? undefined : text; this.rec.captionTop = up
       this.rec.marks.push(Date.now())
       await this.evaluate(CAPTION_JS(this.rec.caption ?? '', up)).catch(() => {})
-      return { ok: true, text: this.rec.caption ? `caption${up ? ' (along the top)' : ''}: ${this.rec.caption}` : 'caption off' }
+      return { ok: true, text: this.rec.caption ? `caption${up ? ' (along the top)' : ''}: ${this.rec.caption}${await this.under('#__lantern_caption', up ? 'without --top it goes along the bottom.' : '`record caption --top …` puts it along the top instead.')}` : 'caption off' }
     }
     if (what === 'stop') {
       const r = this.rec; if (!r) return { ok: false, text: 'not recording' }
@@ -938,16 +951,17 @@ export class Page {
     const o = rest.findIndex((a) => a === '--out' || a.startsWith('--out=')); if (o >= 0) { out = rest[o].startsWith('--out=') ? rest[o].slice(6) : rest[o + 1]; rest.splice(o, rest[o].startsWith('--out=') ? 1 : 2); if (!out) return { ok: false, text: 'screenshot --out needs a file name' } }
     const crop = rest.includes('--crop'); if (crop) rest.splice(rest.indexOf('--crop'), 1)
     const region = /^(\d+),(\d+),(\d+),(\d+)$/.exec(rest[0] ?? '')
+    let warn = '' // the target can only partly be seen
     let lit = 0 // a target without --crop: the whole viewport, the size under test, with the target glowing (the highlight's id, to take off after)
     // Chrome's clip is in page coordinates (from the top of the document), while rects and regions are in the viewport.
     const scrolled = await this.evaluate<{ x: number; y: number }>('({ x: scrollX, y: scrollY })')
     if (region) { clip = { x: +region[1] + scrolled.x, y: +region[2] + scrolled.y, width: +region[3], height: +region[4] }; what = ` — the region ${rest[0]}` }
     else if (rest[0] && !crop) {
-      const { name, matches } = await this.locate(rest.join(' '))
+      const { name, matches, blocked } = await this.locate(rest.join(' '))
       lit = await this.evaluate<number>(ANNOTATE_JS('highlight')).catch(() => 0); await sleep(120)
-      what = ` — "${name}" highlighted${this.several({ x: 0, y: 0, name, matches })}`
+      what = ` — "${name}" highlighted${this.several({ x: 0, y: 0, name, matches })}`; warn = this.hidden(blocked)
     } else if (rest[0]) {
-      const { rect: r, name, scroll, matches } = await this.locate(rest.join(' '))
+      const { rect: r, name, scroll, matches, blocked } = await this.locate(rest.join(' ')); warn = this.hidden(blocked)
       const [cw, ch] = this.size, pad = 12
       clip = { x: Math.max(0, Math.floor(r.x - pad)) + scroll.x, y: Math.max(0, Math.floor(r.y - pad)) + scroll.y, width: Math.min(cw, Math.ceil(r.width + pad * 2)), height: Math.min(ch, Math.ceil(r.height + pad * 2)) }
       what = ` — "${name}"${this.several({ x: 0, y: 0, name, matches })}`
@@ -973,6 +987,6 @@ export class Page {
     for (const old of fs.readdirSync(this.outDir).filter((f) => f.startsWith('shot-') && f.endsWith('.png')).sort().slice(0, -19)) fs.rmSync(path.join(this.outDir, old), { force: true })
     const file = out ? (out.includes('/') || out.includes('\\') ? path.resolve(cwd, out) : path.join(this.outDir, out)) : path.join(this.outDir, `shot-${stamp()}.png`)
     fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, buf)
-    return { ok: true, text: `${file}\n(${w}×${h} of ${await this.where()}${what} — read the file to look at it)` }
+    return { ok: true, text: `${file}\n(${w}×${h} of ${await this.where()}${what} — read the file to look at it)${warn.replace('then mark it again', 'then take it again')}` }
   }
 }

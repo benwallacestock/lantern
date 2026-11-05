@@ -140,8 +140,25 @@ export const locateJs = (target: string, scroll = true, same = false) => String.
     const related = (a, b) => a === b || a.contains(b) || b.contains(a) || (a.shadowRoot && a.shadowRoot.contains(b)) || (b.shadowRoot && b.shadowRoot.contains(a)) || (lab && (lab.control === b || lab.contains(b)))
     if (at && !isMine(at) && !related(at, el)) covered = at.tagName.toLowerCase() + (at.id ? '#' + at.id : '') + (at.className && typeof at.className === 'string' ? '.' + at.className.trim().split(/\s+/).slice(0, 2).join('.') : '')
   }
+  // How much of it can be seen: a tip, a popover or a banner lying over part of it hides it from whoever looks at the picture,
+  // though a click on its middle may still land. Fifteen points across it are asked what is on top.
+  let blocked = null
+  { const x0 = Math.max(r.left, 0), x1 = Math.min(r.right, innerWidth), y0 = Math.max(r.top, 0), y1 = Math.min(r.bottom, innerHeight)
+    if (x1 > x0 && y1 > y0) {
+      const root = el.getRootNode(); let hid = 0, n = 0, by = null
+      for (const fx of [.06, .28, .5, .72, .94]) for (const fy of [.2, .5, .8]) {
+        n++; const px = x0 + (x1 - x0) * fx, py = y0 + (y1 - y0) * fy
+        let at = (root.elementFromPoint ? root : document).elementFromPoint(px, py)
+        while (at && at.shadowRoot && at.shadowRoot.elementFromPoint) { const inner = at.shadowRoot.elementFromPoint(px, py); if (!inner || inner === at) break; at = inner }
+        if (!at || isMine(at) || (at.closest && at.closest('.__lantern'))) continue
+        const lab = at.closest && at.closest('label')
+        if (at === el || at.contains(el) || el.contains(at) || (lab && (lab.control === el || lab.contains(el)))) continue
+        hid++; by = by || at
+      }
+      if (hid) { let top = by; for (let p = by; p && p !== document.body && p !== document.documentElement; p = p.parentElement) { const pos = getComputedStyle(p).position; if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') { top = p; break } } blocked = { part: hid / n, by: clean(top.innerText).slice(0, 48) || top.tagName.toLowerCase() + (top.id ? '#' + top.id : '') } }
+    } }
   const name = clean(el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || (el.labels && el.labels.length && [...el.labels].map((l) => l.innerText).join(' ')) || (el.tagName === 'INPUT' && /^(submit|button|reset)$/i.test(el.type) && el.value) || el.getAttribute('title') || (() => { let p = el.parentElement, near = ''; for (let i = 0; i < 4 && p && !near; i++, p = p.parentElement) near = clean(p.innerText); return 'unnamed ' + el.tagName.toLowerCase() + (near ? ' by ' + near.slice(0, 36) : '') })()).slice(0, 60)
-  return { x: cx, y: cy, rect: { x: r.left, y: r.top, width: r.width, height: r.height }, name, matches, covered, scroll: { x: scrollX, y: scrollY } }
+  return { x: cx, y: cy, rect: { x: r.left, y: r.top, width: r.width, height: r.height }, name, matches, covered, blocked, scroll: { x: scrollX, y: scrollY } }
 })()`
 
 /** Focus the element the last locate found and select what is in it, ready for typing to replace it. */

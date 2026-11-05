@@ -178,6 +178,18 @@ test('a callout goes on the side asked for', async () => {
   const [lx] = await side('--left'), [rx] = await side('--right'), [, ay] = await side('--above'), [, by] = await side('--below')
   assert.ok(lx < 700 && rx > 700 && ay < 450 && by > 450, `left ${lx}, right ${rx}, above ${ay}, below ${by}`)
 })
+test('marking or picturing something a tip is lying over says so, and says when the words cover something', async () => {
+  await ok('open', app.url + '/tip')
+  const out = await ok('callout', '#msg', 'Sending is blocked')
+  assert.match(out, /⚠ about (a third|half|a fifth) of it is hidden behind "Navigation has moved[^"]*", which is on top of it/)
+  assert.match(await ok('highlight', '#msg'), /hidden behind "Navigation has moved/); assert.match(await ok('screenshot', '#msg'), /hidden behind "Navigation has moved[^]*take it again/)
+  await ok('clear'); await ok('click', 'text=Dismiss')
+  const clear = await ok('callout', '#msg', 'Sending is blocked', '--above'); assert.doesNotMatch(clear, /hidden behind/); assert.doesNotMatch(clear, /lie over/)
+  await ok('clear')
+  assert.match(await ok('callout', '#msg', 'Same message as before, and sending is blocked', '--below'), /⚠ the words lie over "(Use new proposal|Settings)[^]*--left, --right, --above or --below/)
+  await ok('clear')
+  assert.equal(await ok('hover', '300,300'), 'hovering over "300,300"')
+})
 test('annotations take a place as well as an element, for what is drawn on a canvas: a spot x,y or a region x,y,w,h', async () => {
   await ok('open', app.url + '/')
   assert.match(await ok('callout', '400,300', 'Drawn here'), /callout on "the spot 400,300": Drawn here/)

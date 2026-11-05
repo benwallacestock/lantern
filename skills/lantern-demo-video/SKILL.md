@@ -46,6 +46,7 @@ Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the d
 ## What goes wrong
 
 - A step flashes past: you acted before the caption, or didn't `wait` for the result. Caption, act, wait.
+- Something of the app's is lying over what you are showing (a tip, a popover, a cookie banner, a toast): you can't see the page, so lantern tells you. A line starting ⚠ in a reply to `callout`, `highlight`, `ring`, `arrow`, `badge`, `screenshot <target>` or `record caption` means the picture is wrong as it stands: dismiss what it names (or move the words, as it says) and do the step again. Before `record start`, take one plain `lantern screenshot` and look at it; close anything that should not be in the video.
 - The clip ran over: budget it before the take. A click is about two seconds on camera, a caption holds at least 2.5, typing is ten characters a second, and every `wait` counts in full; ten clicks and five captions are already past thirty seconds with no waits at all. Cut waits first, then steps.
 - The take is slow to perform, or drifts from the rehearsal: run it as one shell script, command after command with no thinking between, and pick up refs inside it (`lantern snapshot | grep "Fill Panels"`) rather than from memory. Shorter takes, and the same every time.
 - The caption sits on the app's own toolbar or a bar along the bottom: `lantern record caption --top "…"` puts it along the top instead.
