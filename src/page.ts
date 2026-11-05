@@ -389,7 +389,19 @@ export class Page {
     // own UI taking the focus, as far as can be told), after a reload, or on a page that paints heavily. Clicks then print
     // success into the void. Check after a navigation of any kind, rather than report success into the void.
     if (this.navigated && (INPUT.has(sub) || NAV.has(sub)) && !(await this.takesInput())) { this.dead = true; this.note('the page stopped taking input after that navigation; the browser is being restarted') }
+    // And that Chrome still draws it, after anything that acts on the page: a stall here is silent otherwise.
+    else if ((INPUT.has(sub) || NAV.has(sub) || sub === 'scroll' || sub === 'hover') && r.ok && !(await this.paints())) { this.dead = true; this.note('the page stopped painting (Chrome stalled); the browser is being restarted — run that again if it did not take') }
     return { ...r, text: this.preface() + r.text }
+  }
+  /** Does Chrome still paint the page? An animation frame is asked for; a stalled compositor (seen on heavy pages: input still
+   * arrives, nothing is drawn, a recording gets no frames, a live view freezes) never delivers one. Asked twice, three seconds
+   * each, so a page busy for a moment is not mistaken for a stalled one; anything but silence counts as painting. */
+  async paints(): Promise<boolean> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { await this.cdp('Runtime.evaluate', { expression: 'new Promise((r) => requestAnimationFrame(() => r(true)))', awaitPromise: true, returnByValue: true }, 3000); return true }
+      catch (e) { if (!/did not answer/.test((e as Error).message)) return true } // a navigation under way, say: can't tell, assume the best
+    }
+    return false
   }
   /** Does a key sent to the page arrive? A Shift press changes nothing on a page. Asked twice, with time to answer,
    * so a slow machine is not mistaken for a dead page: a restart on a false alarm costs seconds. */
