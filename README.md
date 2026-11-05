@@ -4,6 +4,16 @@
 
 > **Written by an AI.** All of lantern was written by Claude, with human direction, and it still needs checking. It has an end-to-end test suite and is used every day, but it is young: point it only at your own app and sites you control.
 
+## Why
+
+Coding agents live in the terminal, and plenty of them never get a window: a CI job, a cloud session, a bot on a server. lantern gives them a browser they can run like any other command.
+
+That buys three things, in the order they tend to matter:
+
+- **Confidence.** An agent that can only read code is guessing whether a change works. With a browser it opens the page, clicks the thing, reads what happened and checks the console, before it says it's done.
+- **Evidence.** A review goes faster with a picture than a paragraph: a framed before/after pair, a screenshot with the change called out, a short demo video with captions. The agent makes them on the way through, and they're ready to drop into the pull request.
+- **A window for you.** `lantern watch` shows the agent's page live, so you can see what it's doing without it stopping to tell you.
+
 ## Install
 
 Needs Node 22.18+ and a Chrome (Google Chrome, Chromium, Edge or Brave). ffmpeg is optional: videos assemble faster and smaller with it.
