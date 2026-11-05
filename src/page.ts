@@ -75,6 +75,7 @@ export class Page {
   lastFrame?: Buffer
   private sentAt = 0
   private screencast = false
+  private capturing = false // a cropped or whole-page screenshot is being taken: the frames Chrome paints for it are dropped
   private cast: 'record' | 'watch' | null = null // what the screencast is tuned for
   currentUrl = 'about:blank'
   private onLoad?: () => void
@@ -102,6 +103,9 @@ export class Page {
     const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' })
     const { sessionId } = await chrome.send<{ sessionId: string }>('Target.attachToTarget', { targetId, flatten: true })
     p.targetId = targetId; p.session = sessionId
+    // The only tab: Chrome's own first tab (and anything it restored from the last run) is closed, so nothing can sit in
+    // front of the page — a tab behind another is hidden, and Chrome paints nothing for it.
+    try { const { targetInfos } = await chrome.send<{ targetInfos: { targetId: string; type: string }[] }>('Target.getTargets'); for (const t of targetInfos) if (t.type === 'page' && t.targetId !== targetId) await chrome.send('Target.closeTarget', { targetId: t.targetId }).catch(() => {}) } catch {}
     chrome.on((sid, method, params) => p.event(sid, method, params))
     await p.cdp('Page.enable'); await p.cdp('Runtime.enable'); await p.cdp('Network.enable')
     p.mainFrame = (await p.cdp<{ frameTree: { frame: { id: string } } }>('Page.getFrameTree')).frameTree.frame.id
@@ -152,6 +156,7 @@ export class Page {
     switch (method) {
       case 'Page.screencastFrame': {
         void this.cdp('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {})
+        if (this.capturing) break // Chrome paints a cropped or whole-page screenshot's region to take it: not the page, so not for a watcher or a recording
         const jpeg = Buffer.from(params.data, 'base64'), now = Date.now()
         // Recording: keep the frame (at most ~12 a second). The page only paints when something changed, so a pause
         // in the agent's thinking leaves a gap in the timestamps, not a run of identical frames.
@@ -189,7 +194,7 @@ export class Page {
     if (!info.url || info.url === 'about:blank') return // not navigated yet; targetInfoChanged will say where
     this.popupIds.delete(info.targetId)
     this.popups.push(info.url)
-    void this.chrome.send('Target.closeTarget', { targetId: info.targetId }).catch(() => {})
+    void this.chrome.send('Target.closeTarget', { targetId: info.targetId }).catch(() => {}).then(() => this.cdp('Page.bringToFront').catch(() => {})) // and the page is in front again
     let host = ''; try { host = new URL(info.url).hostname } catch {}
     if (this.popups.length > 1) return // one is followed; the rest of a burst are only counted
     if (hostAllowed(this.config.hosts, host)) void this.load(info.url); else this.note(`a link wanted to open ${info.url} in a new tab (not one of this project's hosts, so not followed)`)
@@ -393,13 +398,15 @@ export class Page {
     else if ((INPUT.has(sub) || NAV.has(sub) || sub === 'scroll' || sub === 'hover') && r.ok && !(await this.paints())) { this.dead = true; this.note('the page stopped painting (Chrome stalled); the browser is being restarted — run that again if it did not take') }
     return { ...r, text: this.preface() + r.text }
   }
-  /** Does Chrome still paint the page? An animation frame is asked for; a stalled compositor (seen on heavy pages: input still
-   * arrives, nothing is drawn, a recording gets no frames, a live view freezes) never delivers one. Asked twice, three seconds
-   * each, so a page busy for a moment is not mistaken for a stalled one; anything but silence counts as painting. */
+  /** Does Chrome still paint the page? An animation frame is asked for; a page Chrome counts as hidden (behind another tab:
+   * input still arrives, nothing is drawn, a recording gets no frames, a live view freezes) never delivers one. Bringing the
+   * page to the front cures that, so that is tried before the answer is no; three seconds each time, so a page busy for a
+   * moment is not mistaken for a stalled one, and anything but silence counts as painting. */
   async paints(): Promise<boolean> {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try { await this.cdp('Runtime.evaluate', { expression: 'new Promise((r) => requestAnimationFrame(() => r(true)))', awaitPromise: true, returnByValue: true }, 3000); return true }
       catch (e) { if (!/did not answer/.test((e as Error).message)) return true } // a navigation under way, say: can't tell, assume the best
+      await this.cdp('Page.bringToFront', {}, 3000).catch(() => {})
     }
     return false
   }
@@ -854,7 +861,10 @@ export class Page {
     // --full: the whole page, however long or wide (up to 8000px each way).
     if (full && !clip) { const d = await this.evaluate<{ w: number; h: number }>('({ w: Math.min(document.documentElement.scrollWidth, 8000), h: Math.min(document.documentElement.scrollHeight, 8000) })'); clip = { x: 0, y: 0, width: Math.max(d.w, this.size[0]), height: Math.max(d.h, this.size[1]) }; what = ' — the whole page' }
     await this.evaluate(FX_JS(true)).catch(() => {}); await sleep(60) // the pointer and any click/key effects stay out of the picture
+    this.capturing = !!clip
     const shot = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { ...clip, scale: 1 } } : {}), captureBeyondViewport: !!(full && !region) }, 20_000).catch(() => null)
+    // Whoever is watching (or a recording) gets the page again: the screencast is started afresh, which sends a whole frame at once.
+    if (this.capturing) { if (this.screencast) { await this.cdp('Page.stopScreencast').catch(() => {}); this.screencast = false; this.capturing = false; await this.wantFrames().catch(() => {}) } this.capturing = false }
     this.fire(FX_JS(false))
     if (this.at) void this.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: this.at.x, y: this.at.y }).catch(() => {}) // the picture must not end a hover
     if (lit) this.fire(REMOVE_JS(lit)) // only for the picture; a highlight the agent set stays

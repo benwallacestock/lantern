@@ -174,6 +174,39 @@ test('watch over the socket: JSON lines with frames and actions', async () => {
   assert.ok(lines.some((l) => l.frame && l.url), 'a frame line')
   assert.ok(lines.some((l) => l.did === 'filled "Walk name"'), `a did line: ${JSON.stringify(lines.filter((l) => l.did))}`)
 })
+const jpegSize = (b: Buffer) => { let i = 2; while (i < b.length - 9) { if (b[i] !== 0xff) { i++; continue } const m = b[i + 1]; if (m === 0xc0 || m === 0xc2) return `${b.readUInt16BE(i + 7)}x${b.readUInt16BE(i + 5)}`; i += 2 + b.readUInt16BE(i + 2) } return '?' }
+/** A watcher on the daemon's socket, as forest's panel is one: the lines it has been sent so far. */
+const socketWatcher = async () => {
+  const sock = path.join(home, 'run', fs.readdirSync(path.join(home, 'run')).find((f) => f.endsWith('.sock'))!)
+  const lines: any[] = [], c = net.createConnection(sock)
+  await new Promise<void>((r) => c.on('connect', r))
+  let buf = ''
+  c.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { lines.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1) } })
+  c.write(JSON.stringify({ cmd: 'watch' }) + '\n')
+  return { lines, close: () => c.destroy() }
+}
+test('two asking for the page at the same moment at the start get one page, and it is the one in front', async () => {
+  await ok('close'); await ok('watch') // the daemon is up, with no page yet
+  const ws = await Promise.all([socketWatcher(), socketWatcher()]) // as a panel connects while the first command lands
+  try {
+    await ok('open', app.url + '/'); await ok('fill', '#name', 'together'); await pause(400)
+    for (const w of ws) assert.ok(w.lines.some((l) => l.did === 'filled "Walk name"'), `each watcher is on the page the commands go to: ${JSON.stringify(w.lines.filter((l) => l.did))}`)
+    assert.equal(await ok('eval', 'document.visibilityState'), 'visible')
+    const pages = (await ok('_cdp', 'Target.getTargets')).match(/"type":"page"/g) ?? []
+    assert.equal(pages.length, 1, 'one tab, so nothing can sit in front of the page')
+  } finally { for (const w of ws) w.close() }
+})
+test('a cropped or whole-page screenshot never reaches the watchers: every frame they get is the viewport', async () => {
+  await ok('open', app.url + '/long')
+  const w = await socketWatcher()
+  try {
+    await ok('scroll', 'down'); await pause(300)
+    await ok('screenshot', 'text=Section 3', '--crop'); await ok('screenshot', '--full'); await ok('screenshot', '10,10,200,100')
+    await ok('scroll', 'up'); await pause(400)
+    const sizes = new Set(w.lines.filter((l) => l.frame).map((l) => jpegSize(Buffer.from(l.frame, 'base64'))))
+    assert.ok(sizes.size >= 1, 'frames arrived'); assert.equal([...sizes].join(' '), [...sizes][0], `one size of frame: ${[...sizes].join(' ')}`)
+  } finally { w.close() }
+})
 test('settings: a .lantern/settings.json above the project applies, a nearer one wins key by key, the environment over all, and `lantern settings` says which', async () => {
   const inner = path.join(proj, 'nested', 'checkout'); fs.mkdirSync(path.join(inner, '.lantern'), { recursive: true }); await sh('git', ['-C', inner, 'init', '-q'])
   fs.mkdirSync(path.join(proj, '.lantern'), { recursive: true })

@@ -76,7 +76,14 @@ async function dispatch(req: any): Promise<Reply> {
   }
 }
 
-async function thePage(): Promise<Page> { return (page ??= await Page.open(chrome!, P.out, path.join(P.profile, 'lantern.json'), CONFIG)) }
+/** The one page. Asked for by several at once at the start (a watcher connecting as the first command lands), it is
+ * still opened once: two would be two tabs, the watcher on one and the commands on the other, and the tab behind is
+ * never painted. */
+let opening: Promise<Page> | undefined
+async function thePage(): Promise<Page> {
+  if (page) return page
+  return (opening ??= Page.open(chrome!, P.out, path.join(P.profile, 'lantern.json'), CONFIG).then((p) => (page = p)).finally(() => { opening = undefined }))
+}
 
 /** A new Chrome in place of one whose page stopped taking input: cookies carried over, the page opened again. */
 async function relaunch(): Promise<string> {

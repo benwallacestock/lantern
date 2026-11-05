@@ -23,7 +23,7 @@ function html(req: VideoFrameReq): string {
 }
 
 export async function videoFrame(chrome: Chrome, req: VideoFrameReq): Promise<VideoFrame> {
-  const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' })
+  const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank', newWindow: true }) // its own window, never in front of the page
   const { sessionId } = await chrome.send<{ sessionId: string }>('Target.attachToTarget', { targetId, flatten: true })
   const s = <T = any>(method: string, params: object = {}) => chrome.send<T>(method, params, sessionId, 20_000)
   try {

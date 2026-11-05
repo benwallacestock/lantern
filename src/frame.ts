@@ -54,7 +54,8 @@ export async function frame(chrome: Chrome, req: FrameReq, outDir: string): Prom
     if (!head.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { ok: false, text: `not a PNG: ${f} (frame takes the PNGs that \`lantern screenshot\` makes)` }
   }
   fs.mkdirSync(outDir, { recursive: true })
-  const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' })
+  // Its own window: a tab opened beside the page would sit in front of it, and Chrome stops painting a page that is behind.
+  const { targetId } = await chrome.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank', newWindow: true })
   const { sessionId } = await chrome.send<{ sessionId: string }>('Target.attachToTarget', { targetId, flatten: true })
   const s = <T = any>(method: string, params: object = {}) => chrome.send<T>(method, params, sessionId, 20_000)
   try {
