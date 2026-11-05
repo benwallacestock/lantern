@@ -207,6 +207,21 @@ test('a cropped or whole-page screenshot never reaches the watchers: every frame
     assert.ok(sizes.size >= 1, 'frames arrived'); assert.equal([...sizes].join(' '), [...sizes][0], `one size of frame: ${[...sizes].join(' ')}`)
   } finally { w.close() }
 })
+test('another tab coming to the front and going does not change what is filmed: the frames stay the size of the page', async () => {
+  await ok('open', app.url + '/long')
+  const w = await socketWatcher()
+  try {
+    await ok('scroll', 'down', '60'); await pause(300)
+    const tab = /[A-F0-9]{32}/.exec(await ok('_cdp', 'Target.createTarget', '{"url":"about:blank"}'))![0] // as a link that opens a new tab does
+    await pause(500); await ok('_cdp', 'Target.closeTarget', JSON.stringify({ targetId: tab })); await pause(500)
+    await ok('scroll', 'down', '60'); await pause(1500) // a frame of the wrong size is noticed here, and the size put back
+    const before = w.lines.length
+    await ok('scroll', 'down', '60'); await ok('scroll', 'up', '60'); await pause(500)
+    const sizes = new Set(w.lines.filter((l) => l.frame).map((l) => jpegSize(Buffer.from(l.frame, 'base64'))))
+    assert.ok(w.lines.slice(before).some((l) => l.frame), 'frames still arrive after')
+    assert.equal([...sizes].join(' '), '1440x900')
+  } finally { w.close() }
+})
 test('settings: a .lantern/settings.json above the project applies, a nearer one wins key by key, the environment over all, and `lantern settings` says which', async () => {
   const inner = path.join(proj, 'nested', 'checkout'); fs.mkdirSync(path.join(inner, '.lantern'), { recursive: true }); await sh('git', ['-C', inner, 'init', '-q'])
   fs.mkdirSync(path.join(proj, '.lantern'), { recursive: true })

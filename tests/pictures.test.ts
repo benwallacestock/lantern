@@ -56,6 +56,11 @@ test('frame: one picture, a pair, options', async () => {
   assert.match(await bad('frame'), /give a screenshot/)
   assert.match(await bad('frame', 'nope.png'), /no such image/)
 })
+test('a screenshot waits for a fade to finish, and not for a spinner that never does', async () => {
+  await ok('open', app.url + '/fade'); await ok('eval', "document.getElementById('dlg').classList.add('on'); 1") // a 1.4s fade starts
+  const shot = firstLine(await ok('screenshot')); assert.ok(fs.existsSync(shot))
+  assert.equal(await ok('eval', "getComputedStyle(document.getElementById('dlg')).opacity"), '1', 'the dialog had faded all the way in when the picture was taken')
+})
 test('a hover survives a screenshot', async () => {
   await ok('open', '/hoverme'); await ok('hover', '#hv')
   assert.equal(await ok('eval', 'getComputedStyle(document.querySelector("#hv .tip")).display'), 'block')

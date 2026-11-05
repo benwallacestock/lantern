@@ -157,6 +157,11 @@ export class Page {
       case 'Page.screencastFrame': {
         void this.cdp('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {})
         if (this.capturing) break // Chrome paints a cropped or whole-page screenshot's region to take it: not the page, so not for a watcher or a recording
+        // Chrome films the page at the size it was given — until another tab has been in front (a link that opened one,
+        // say), after which it films only what fits its real window: the bottom strip is lost and the rest stretched to
+        // fit. Such a frame is not kept, and the size is given again, which puts it right.
+        const dh = params.metadata?.deviceHeight, dw = params.metadata?.deviceWidth
+        if (dh && dw && (Math.abs(dh - this.size[1]) > 2 || Math.abs(dw - this.size[0]) > 2)) { this.resize(); break }
         const jpeg = Buffer.from(params.data, 'base64'), now = Date.now()
         // Recording: keep the frame (at most ~12 a second). The page only paints when something changed, so a pause
         // in the agent's thinking leaves a gap in the timestamps, not a run of identical frames.
@@ -194,7 +199,7 @@ export class Page {
     if (!info.url || info.url === 'about:blank') return // not navigated yet; targetInfoChanged will say where
     this.popupIds.delete(info.targetId)
     this.popups.push(info.url)
-    void this.chrome.send('Target.closeTarget', { targetId: info.targetId }).catch(() => {}).then(() => this.cdp('Page.bringToFront').catch(() => {})) // and the page is in front again
+    void this.chrome.send('Target.closeTarget', { targetId: info.targetId }).catch(() => {}).then(() => { this.resizedAt = 0; this.resize() }) // and the page is in front again, at its size
     let host = ''; try { host = new URL(info.url).hostname } catch {}
     if (this.popups.length > 1) return // one is followed; the rest of a burst are only counted
     if (hostAllowed(this.config.hosts, host)) void this.load(info.url); else this.note(`a link wanted to open ${info.url} in a new tab (not one of this project's hosts, so not followed)`)
@@ -236,6 +241,13 @@ export class Page {
     const loaded = new Promise<void>((r) => { this.onLoad = r })
     await Promise.race([loaded, sleep(ms)])
     await sleep(300)
+  }
+  /** Give the page its size again (see the screencast frames: Chrome can stop filming all of it). Once a second at most. */
+  private resizedAt = 0
+  private resize() {
+    if (Date.now() - this.resizedAt < 1000) return
+    this.resizedAt = Date.now()
+    void this.cdp('Page.bringToFront').catch(() => {}).then(() => this.setSize(...this.size)).catch(() => {})
   }
   async setSize(w: number, h: number) { this.size = [w, h]; await this.cdp('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: SCALE, mobile: false }) }
   url() { return this.evaluate<string>('location.href') }
@@ -407,6 +419,7 @@ export class Page {
       try { await this.cdp('Runtime.evaluate', { expression: 'new Promise((r) => requestAnimationFrame(() => r(true)))', awaitPromise: true, returnByValue: true }, 3000); return true }
       catch (e) { if (!/did not answer/.test((e as Error).message)) return true } // a navigation under way, say: can't tell, assume the best
       await this.cdp('Page.bringToFront', {}, 3000).catch(() => {})
+      await this.setSize(...this.size).catch(() => {}) // being behind also loses the size Chrome films at
     }
     return false
   }
@@ -762,7 +775,7 @@ export class Page {
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
       await this.wantFrames()
-      return { ok: true, text: `recording at ${rw}×${rh} (the clip comes out ${Math.min(1920, rw * SCALE)} pixels wide${opts.title ? `, in a frame titled "${opts.title}"` : ''}) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
+      return { ok: true, text: `recording at ${rw}×${rh} (the clip comes out ${Math.min(2880, rw * SCALE)} pixels wide${opts.title ? `, in a frame titled "${opts.title}"` : ''}) — do the steps, set captions with \`lantern record caption <text>\`, then \`lantern record stop\`` }
     }
     if (what === 'caption') {
       if (!this.rec) return { ok: false, text: 'not recording — `lantern record start` first' }
@@ -863,6 +876,9 @@ export class Page {
     // --full: the whole page, however long or wide (up to 8000px each way).
     if (full && !clip) { const d = await this.evaluate<{ w: number; h: number }>('({ w: Math.min(document.documentElement.scrollWidth, 8000), h: Math.min(document.documentElement.scrollHeight, 8000) })'); clip = { x: 0, y: 0, width: Math.max(d.w, this.size[0]), height: Math.max(d.h, this.size[1]) }; what = ' — the whole page' }
     await this.evaluate(FX_JS(true)).catch(() => {}); await sleep(60) // the pointer and any click/key effects stay out of the picture
+    // A fade or a slide under way (a dialog opening) is let finish, for up to a second and a half: a picture of a
+    // half-faded dialog is no use. Animations that never end (a spinner) are not waited for.
+    await this.evaluate(`Promise.race([new Promise((r) => setTimeout(r, 1500)), Promise.allSettled(document.getAnimations().filter((a) => a.playState === 'running' && !a.effect?.target?.closest?.('.__lantern') && Number.isFinite(a.effect?.getComputedTiming?.().endTime)).map((a) => a.finished))]).then(() => 1)`).catch(() => {})
     this.capturing = !!clip
     const shot = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { ...clip, scale: 1 } } : {}), captureBeyondViewport: !!(full && !region) }, 20_000).catch(() => null)
     // Whoever is watching (or a recording) gets the page again: the screencast is started afresh, which sends a whole frame at once.
