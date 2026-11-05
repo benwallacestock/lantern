@@ -2,6 +2,35 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.9.0 — 2026-11-05
+
+### Added
+- `lantern close --all`, and the skills end by closing the browser
+  - Closing the browser is the explicit last step of every skill: a lantern left open is a Chrome left running, and agents were leaving them to the half-hour idle exit
+  - `lantern close --all` closes every lantern on the project, for an agent that started several by name
+
+### Fixed
+- A scroll sends the same wheel events while recording as when not
+  - A recording used to spread a scroll over more wheel events than a rehearsal did, so a canvas that zooms a step per event (a map, a 3D view) ended up further in on camera than it had off it. The events are now the same, only slower on camera.
+- Frame: a long branch name is cut short in the footer instead of wrapping
+  - The footer is one line in stills and videos: a branch name or your own words too long for the picture end in an ellipsis, and the note, the time and "made with lantern" stay whole.
+- The page is the only tab and stays in front, and a cropped screenshot never reaches the watchers
+  - Two asking for the page at the same moment at the start (a panel connecting to watch as the first command lands) each opened a tab: the watcher sat on one, the commands went to the other, and the tab behind was never painted, so the live view froze and recordings got no frames. The page is now opened once.
+  - Chrome's own first tab is closed, and the frame for a picture or a video is drawn in its own window, so nothing sits in front of the page.
+  - A page Chrome counts as hidden is brought to the front before the browser is restarted for not painting.
+  - The frames Chrome paints while taking a cropped, region or whole-page screenshot are dropped, and the stream starts afresh after, so a watcher and a recording only ever get the viewport.
+- A page Chrome has stopped painting is caught after any action, and the browser restarted
+  - After a click, a fill, a scroll, a hover or a navigation, lantern asks the page for an animation frame; when none ever comes (a stall seen on heavy pages, where input still arrives but nothing is drawn, a live view freezes and a recording gets no frames) the browser is restarted and the message says so
+- An update waits for a quiet moment, a restart comes back to the page it was on, and two reads see more
+  - A newer lantern no longer restarts the browser under an agent mid-task: a daemon in use, or recording, keeps going and is restarted once it has been idle for five minutes
+  - After a restart the page reopens where it was, including where an app's own routing took it (it used to reopen the last URL passed to `open`)
+  - `wait <text>` also sees text typed into a field, and a placeholder
+  - `scroll top` and `scroll bottom` move the app's own scrolling container when the window itself does not scroll
+- Update: an update installs where lantern is installed, and retries when npm is not ready
+  - The self-update passes the prefix this copy lives under (nvm, a custom prefix), instead of leaving npm to pick its default
+  - For a few minutes after a release npm names a latest version it cannot yet install; the background update now forgets that check so the next daemon start tries again, and `lantern update` says to try again shortly
+  - Checked end to end: an old build in a throwaway prefix updated itself on demand and through the daemon's daily check
+
 ## 0.8.1 — 2026-11-05
 
 ### Fixed
