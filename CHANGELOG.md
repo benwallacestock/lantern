@@ -2,6 +2,14 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.9.1 — 2026-11-05
+
+### Fixed
+- A recording films the whole page after another tab has been in front, and a screenshot waits for a fade
+  - After another tab had been in front (a link that opened one; before 0.9.0, also every framed picture), Chrome filmed only what fits its real window: the bottom strip of the page, where captions sit, was lost from a recording and the live view, and the rest stretched to fit. Such frames are now dropped and the page given its size again, which puts it right.
+  - A screenshot lets a fade or slide under way finish (up to a second and a half), so a dialog is not caught half-faded; animations that never end are not waited for.
+  - `record start` says the width the clip really comes out at.
+
 ## 0.9.0 — 2026-11-05
 
 ### Added
