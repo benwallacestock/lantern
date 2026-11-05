@@ -8,7 +8,10 @@ export type Foot = { note?: string; branch?: string; footer?: string; accent?: s
 export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
 /** The lantern glyph, in the accent colour, for the mark. */
-export const GLYPH = (accent: string) => `<svg viewBox="76 24 104 176" aria-hidden="true"><path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="14" stroke-linecap="round"/><rect x="84" y="70" width="88" height="16" rx="6" fill="#e8e8ee"/><rect x="92" y="86" width="72" height="92" rx="12" fill="${accent}" stroke="#e8e8ee" stroke-width="12"/><path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="#fff1c2"/><rect x="84" y="178" width="88" height="16" rx="6" fill="#e8e8ee"/></svg>`
+const SHAPES = (accent: string) => `<path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="14" stroke-linecap="round"/><rect x="84" y="70" width="88" height="16" rx="6" fill="#e8e8ee"/><rect x="92" y="86" width="72" height="92" rx="12" fill="${accent}" stroke="#e8e8ee" stroke-width="12"/><path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="#fff1c2"/><rect x="84" y="178" width="88" height="16" rx="6" fill="#e8e8ee"/>`
+export const GLYPH = (accent: string) => `<svg viewBox="76 24 104 176" aria-hidden="true">${SHAPES(accent)}</svg>`
+/** The mark as a tab's icon: the glyph on lantern's dark square, as a data: URL for a <link rel="icon">. */
+export const FAVICON = (accent: string = ORANGE) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" rx="56" fill="#16161a"/>${SHAPES(accent)}</svg>`)
 
 export const when = () => new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 

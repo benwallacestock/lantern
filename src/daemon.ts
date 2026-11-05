@@ -9,6 +9,7 @@ import path from 'node:path'
 import { findChrome, launchChrome, NO_CHROME } from './chrome.ts'
 import type { Chrome } from './cdp.ts'
 import { frame } from './frame.ts'
+import { FAVICON } from './frameHtml.ts'
 import { Page, SETTLE, type Reply } from './page.ts'
 import { buildId, instances, paths } from './paths.ts'
 import { dailyCheck } from './update.ts'
@@ -142,7 +143,7 @@ function previewUrl(): Promise<string> {
     } else {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       const name = root.split('/').pop() + (P.name ? ` · ${P.name}` : '')
-      res.end(`<!doctype html><meta charset="utf-8"><title>lantern · ${name}</title>
+      res.end(`<!doctype html><meta charset="utf-8"><title>lantern · ${name}</title><link rel="icon" href="${FAVICON(CONFIG.accent)}">
 <style>
 html,body{margin:0;height:100%;background:#16161a;color:#e8e8ee;font:13px -apple-system,system-ui,sans-serif}
 body{display:flex;flex-direction:column}

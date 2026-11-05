@@ -53,6 +53,7 @@ test('watch: a live preview page streams frames and actions', async () => {
   const out = await ok('watch')
   const url = firstLine(out); assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/$/)
   const html = await (await fetch(url)).text(); assert.match(html, /\/stream/); assert.match(html, /\/events/)
+  assert.match(html, /<link rel="icon" href="data:image\/svg\+xml,/, 'the tab has lantern\'s icon')
   // The stream: the first frame comes at once (the last one painted), more as the page changes.
   const ac = new AbortController()
   const res = await fetch(url + 'stream', { signal: ac.signal })
@@ -154,7 +155,7 @@ test('named lanterns on one project: separate pages, pictures and status; watch 
     assert.match((await lanternWith({}, '--name', 'beta', 'url')).out, /\/long/, '--name works like LANTERN_NAME')
     const shot = firstLine((await lanternWith({ LANTERN_NAME: 'alpha' }, 'screenshot')).out); assert.ok(shot.includes(path.join('tmp', 'lantern', 'alpha') + path.sep), `pictures in the name's folder: ${shot}`)
     const st = (await lanternWith({ LANTERN_NAME: 'alpha' }, 'status')).out; assert.match(st, /lantern "alpha" is up/); assert.match(st, /also on this project: .*beta/)
-    const all = (await lantern('watch', '--all')).out; const file = firstLine(all); assert.ok(fs.existsSync(file)); const html = fs.readFileSync(file, 'utf8')
+    const all = (await lantern('watch', '--all')).out; const file = firstLine(all); assert.ok(fs.existsSync(file)); const html = fs.readFileSync(file, 'utf8'); assert.match(html, /<link rel="icon" href="data:image\/svg\+xml,/)
     assert.ok((html.match(/<iframe /g) || []).length >= 2, 'a live view for each named lantern (and the unnamed one when it is up)'); assert.match(all, /alpha: http:\/\/127\.0\.0\.1:\d+\//); assert.match(all, /beta: http/)
   } finally { await lanternWith({ LANTERN_NAME: 'alpha' }, 'close'); await lanternWith({ LANTERN_NAME: 'beta' }, 'close') }
 })
