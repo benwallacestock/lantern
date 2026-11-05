@@ -21,6 +21,15 @@ export const version = () => { try { return String(JSON.parse(fs.readFileSync(pa
 /** Installed with `npm install -g` (as opposed to run from a checkout, or by npx from its cache): the one kind we can update in place. */
 export const isGlobalInstall = () => { const p = packageRoot().split(path.sep).join('/'); return p.includes('/node_modules/' + NAME) && !p.includes('/_npx/') }
 export const npmBin = () => (process.platform === 'win32' ? 'npm.cmd' : 'npm')
+/** The npm prefix this lantern is installed under (<prefix>/lib/node_modules/@scope/name, or <prefix>/node_modules/… on Windows),
+ * so an update goes back where this copy lives — nvm, a custom prefix — not to whatever npm's default prefix is. */
+export function installPrefix(): string | undefined {
+  const p = packageRoot().split(path.sep).join('/'), tail = '/node_modules/' + NAME
+  if (!p.endsWith(tail)) return undefined
+  const above = p.slice(0, -tail.length)
+  return above.endsWith('/lib') ? above.slice(0, -4) : above
+}
+const installArgs = (v: string) => { const prefix = installPrefix(); return ['install', '-g', ...(prefix ? ['--prefix', prefix] : []), `${NAME}@${v}`] }
 
 export const newer = (a: string, b: string) => { // a > b, for x.y.z (anything else never counts as newer)
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number)
@@ -55,11 +64,14 @@ export async function dailyCheck(home: string, log: (...a: unknown[]) => void, e
   if (!v || !newer(v, version()) || memo.installing === v) return
   writeMemo(home, { checked: Date.now(), latest: v, installing: v })
   log(`lantern ${v} is out (this is ${version()}): installing it in the background`)
-  // Detached, with its own log: the daemon may stop before npm is done, and that is fine.
+  // Detached, with its own log: the daemon may stop before npm is done, and that is fine. If npm cannot install it — for
+  // a few minutes after a release npm's "latest" runs ahead of the package it names — the memo is removed, so the next
+  // daemon start tries again rather than waiting a day.
   try {
     fs.mkdirSync(path.join(home, 'log'), { recursive: true })
     const out = fs.openSync(path.join(home, 'log', 'update.log'), 'a')
-    spawn(npmBin(), ['install', '-g', `${NAME}@${v}`], { detached: true, stdio: ['ignore', out, out] }).unref()
+    const script = `const { spawnSync } = require('node:child_process'); const r = spawnSync(${JSON.stringify(npmBin())}, ${JSON.stringify(installArgs(v))}, { stdio: 'inherit' }); if (r.status !== 0) { try { require('node:fs').rmSync(${JSON.stringify(memoFile(home))}, { force: true }) } catch {} console.log('lantern: the update to ${v} did not install; it will be tried again') }`
+    spawn(process.execPath, ['-e', script], { detached: true, stdio: ['ignore', out, out] }).unref()
   } catch (e) { log('could not start the update:', (e as Error).message) }
 }
 
@@ -70,8 +82,8 @@ export async function updateNow(home: string): Promise<{ ok: boolean; text: stri
   writeMemo(home, { ...readMemo(home), checked: Date.now(), latest: v })
   if (!newer(v, cur)) return { ok: true, text: `lantern ${cur} is the latest` }
   if (!isGlobalInstall()) return { ok: true, text: `lantern ${v} is out (this is ${cur}). This copy is not a global npm install, so update it where it came from — \`npm install -g ${NAME}\` to have one that keeps itself current.` }
-  const log = await new Promise<string>((res) => execFile(npmBin(), ['install', '-g', `${NAME}@${v}`], { maxBuffer: 1 << 24 }, (e, so, se) => res(e ? `${se || so || e.message}` : '')))
-  if (log) return { ok: false, text: `npm could not install ${v}:\n${log.trim().slice(-600)}` }
+  const log = await new Promise<string>((res) => execFile(npmBin(), installArgs(v), { maxBuffer: 1 << 24 }, (e, so, se) => res(e ? `${se || so || e.message}` : '')))
+  if (log) return { ok: false, text: /ETARGET|No matching version/.test(log) ? `lantern ${v} is out but npm has not finished publishing it (this takes a few minutes after a release): run \`lantern update\` again shortly` : `npm could not install ${v}:\n${log.trim().slice(-600)}` }
   writeMemo(home, { checked: Date.now(), latest: v, installing: v })
   return { ok: true, text: `lantern ${cur} → ${v}. The browser restarts on the next command; the skills, if \`lantern skills install\` linked them, are already the new ones.` }
 }
