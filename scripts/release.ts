@@ -3,14 +3,14 @@
 //
 //   feat: …                      a minor bump (0.2.1 → 0.3.0): something new
 //   fix: … / perf: … / anything else that changes the program   a patch (0.2.1 → 0.2.2)
-//   feat!: … or "BREAKING CHANGE" in the body   a major bump once past 1.0; a minor before it
+//   feat!: … or "BREAKING CHANGE" in the body   a major bump (1.4.2 → 2.0.0); before 1.0 it was a minor
 //   docs: / chore: / ci: / test: / style: / build:   no release (nothing a user of the CLI would notice)
 //
 // The subjects become the release notes, grouped Added / Fixed / Changed, under the version in CHANGELOG.md ("- "
 // lines in a commit's body come along as sub-points). Then package.json, package-lock.json and the Claude plugin's
 // version are bumped, it is committed as "lantern x.y.z", tagged vx.y.z and pushed, and the workflow that ran this
 // publishes the GitHub Release and the npm package. `node scripts/release.ts auto --dry` shows what would happen.
-// `node scripts/release.ts 1.0.0` forces a version (for 1.0). `node scripts/release.ts notes 0.3.0` prints a version's notes.
+// A line `Release-As: 1.0.0` in a commit's body picks the version (for 1.0); `node scripts/release.ts 1.0.0` forces one by hand. `node scripts/release.ts notes 0.3.0` prints a version's notes.
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -31,10 +31,14 @@ export function kindOf(c: Commit): Kind {
   return 'patch'
 }
 
-/** The next version after `current` for these commits, or null when none of them is a release. Before 1.0 a breaking change is a minor bump: 1.0 is chosen by hand. */
+/** The next version after `current` for these commits, or null when none of them is a release. Before 1.0 a breaking change
+ * is a minor bump: 1.0 is chosen, by a `Release-As: 1.0.0` line in a commit's body (any version above the current one). */
 export function bump(current: string, commits: Commit[]): string | null {
   const kinds = commits.map(kindOf)
   const [ma, mi, pa] = current.split('.').map(Number)
+  const above = (v: string) => { const [a, b, c] = v.split('.').map(Number); return a > ma || (a === ma && (b > mi || (b === mi && c > pa))) }
+  const asked = commits.filter((c) => kindOf(c)).map((c) => /^Release-As:\s*(\d+\.\d+\.\d+)\s*$/im.exec(c.body)?.[1]).find((v) => v && above(v))
+  if (asked) return asked
   let kind: Kind = kinds.includes('major') ? 'major' : kinds.includes('minor') ? 'minor' : kinds.includes('patch') ? 'patch' : null
   if (kind === 'major' && ma === 0) kind = 'minor'
   return kind === 'major' ? `${ma + 1}.0.0` : kind === 'minor' ? `${ma}.${mi + 1}.0` : kind === 'patch' ? `${ma}.${mi}.${pa + 1}` : null
