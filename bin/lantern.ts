@@ -149,6 +149,12 @@ async function main() {
     if (!rest[0] || rest[0] === 'status') { console.log(skillsStatus()); return }
     die('usage: lantern skills [install|status]')
   }
+  if (cmd === 'close' && rest.includes('--all')) {
+    // Every lantern on this project: the unnamed one and each named one.
+    const up = instances(root)
+    for (const n of up) await new Promise<void>((res) => { const c = net.createConnection(paths(root, n || undefined).sock); c.on('connect', () => c.write(JSON.stringify({ cmd: 'close' }) + '\n')); c.on('data', () => {}); c.on('end', () => res()); c.on('error', () => res()) })
+    console.log(up.length ? `closed ${up.map((n) => n || '(unnamed)').join(', ')}` : 'no lantern was running for this project'); return
+  }
   if (cmd === 'status' || cmd === 'close') {
     if (!fs.existsSync(P.sock)) {
       let pid = 0; try { pid = Number(fs.readFileSync(P.pid, 'utf8')) } catch {}

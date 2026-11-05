@@ -35,7 +35,8 @@ export const USAGE = `lantern — a browser for coding agents: drive the app, ta
   lantern watch --all         one page with every lantern on this project side by side
   lantern --name <n> <command>   one of several lanterns on the same project (or LANTERN_NAME=<n>): its own browser, login and
                               tmp/lantern/<n>/ for pictures, so parallel agents never share a page
-  lantern status · close      is lantern up for this project; close its browser (it closes itself 30 minutes after the last command)
+  lantern status · close      is lantern up for this project; close its browser when you are done (it closes itself 30 minutes after
+                              the last command, but don't leave it to that); close --all for every lantern on the project
   lantern update              install the latest lantern now (a global npm install checks once a day and updates itself)
   lantern skills install      link the skills in this package into ~/.claude/skills (and Codex's), so they follow every update
   lantern settings            the settings in force for this project and where each came from

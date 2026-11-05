@@ -36,3 +36,5 @@ A change you can't see working isn't done. This is the pass to make after the co
 ## 5. Say what you found
 
 Report in three parts: what works (with the evidence), what doesn't or differs from the design (exactly, with a picture), and what you couldn't check (no design, no data, a flow that needs a real account). A verdict with no evidence is a guess.
+
+Then close the browser, `lantern close`: the evidence is on disk and a lantern left open is a Chrome left running.

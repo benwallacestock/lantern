@@ -20,6 +20,8 @@ The `lantern` skill covers the commands themselves; this one is how to make a re
 7. **Show states when the look is the change.** For a new control, a switcher, a hover or focus style, or anything whose point is how it looks and responds, let the viewer see the states: `hover <target>` and `wait 1000` shows its hover state (the pointer really travels while recording, so things light up on the way as they would for a person), then click it and `wait` for the pressed or selected state. For a flow or a behaviour change, skip this: it only slows the demo down.
 8. **End on the finished state.** Last caption says what changed, hold it with `wait 2000`, then `record stop`. The video is real time: every action as it happened (a click is about two seconds with the pointer's glide and the page settling, typing about ten characters a second), every `wait` in full, and each caption for at least 2.5 seconds; what is cut is your thinking and your reads between steps, each to a beat. Budget from that: under thirty seconds means a handful of clicks, a few short values typed, short waits. `record stop` prints the length. The clip is the page at 2x (2880 pixels wide for the desktop size), inside the banner; `--title` gives a title bar across the whole video, not an opening card.
 
+9. **Close the browser.** After `record stop` and any pictures: `lantern close`. The video is on disk; nothing else needs the page.
+
 ## Commands
 
 ```bash
@@ -36,6 +38,7 @@ lantern wait 2500
 lantern clear                                          # marks off before the next step
 lantern record caption off                             # no caption for a while, if a step speaks for itself
 lantern record stop                                    # → tmp/lantern/demo-….mp4 and its length
+lantern close                                          # done: don't leave the browser running
 ```
 
 Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the demo shows'` (or `--attach` on `pr create` / `pr comment`; gh 2.99+ — an older gh has no `--attach`, so say where the file is and ask the person to drag it into the PR). GitHub plays MP4 inline. Never commit it.

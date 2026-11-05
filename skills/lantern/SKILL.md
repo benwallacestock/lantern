@@ -85,6 +85,10 @@ gh pr edit 123 --attach './tmp/lantern/framed-….png#Canvas and device symbols'
 
 For a change a still can't show — a drag, a flow across pages, something animating — record a demo: see the `lantern-demo-video` skill.
 
+## When you're done
+
+Close the browser: `lantern close` (with the same `LANTERN_NAME` you used; `lantern close --all` closes every lantern on the project). It is the last step of any task that used lantern — after the pictures are framed and the video is stopped, before you report. A lantern left open is a Chrome left running on the person's machine; it closes itself after half an hour, but don't leave that to it. The login is kept for next time.
+
 ## Settings
 
 Most projects need none: `lantern open http://localhost:3000` and go. When something is missing — the page needs a dev login, pictures should go elsewhere, the footer should say something else — put the setting where it belongs, and never a secret in the repository:
