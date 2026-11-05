@@ -2,6 +2,14 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.8.0 — 2026-11-05
+
+### Added
+- Annotations survive a navigation, screenshot takes --out, and frame finds a bare picture name
+  - A blur, callout, badge, ring, arrow or highlight the agent set is put back after the page navigates, wherever the new page has the same target, so a blur over a name holds through a flow
+  - `screenshot --out name.png` names the file, a bare name staying in the pictures folder, as `frame --out` does
+  - `frame before.png after.png` finds a bare name in the pictures folder, and says where it looked when a picture is missing
+
 ## 0.7.0 — 2026-11-04
 
 ### Added
