@@ -72,11 +72,24 @@ test('a scroll sends the page the same wheel events on camera as off it, so a ca
   await ok('record', 'stop')
   assert.equal(on, off)
 })
+test('a caption can go along the top, and annotations outlive the recording for a still of the end', async () => {
+  await ok('open', app.url + '/')
+  await ok('record', 'start')
+  assert.match(await ok('record', 'caption', '--top', 'Above the toolbar'), /caption \(along the top\): Above the toolbar/)
+  assert.ok(Number(await ok('eval', "document.getElementById('__lantern_caption').getBoundingClientRect().top")) < 100, 'the caption is at the top')
+  await ok('record', 'caption', 'Back at the bottom'); assert.ok(Number(await ok('eval', "document.getElementById('__lantern_caption').getBoundingClientRect().top")) > 600)
+  await ok('fill', '#name', 'kept'); await ok('highlight', '#name')
+  await ok('record', 'stop')
+  assert.equal(await ok('eval', "!!document.getElementById('__lantern_caption')"), 'false', 'the caption goes with the recording')
+  assert.equal(await ok('eval', "document.querySelectorAll('.__l-highlight, .__l-glow').length > 0"), 'true', 'the highlight is still there')
+  await ok('clear')
+})
 test('a titled recording is framed: the video is bigger than the clip', async () => {
   await ok('open', '/')
   assert.match(await ok("record", "start", "--title", "A framed demo", "--note", "TRAIL-1"), /in a frame titled "A framed demo"/)
   await ok('record', 'caption', 'Estimate'); await ok('click', 'text=Estimate time'); await ok('callout', '#result', 'The estimate'); await ok('wait', '400')
   const out = await ok('record', 'stop'); const f = firstLine(out); assert.match(out, /; framed/); assert.ok(fs.existsSync(f))
+  assert.match(out, /1 annotation is still on the page/, 'and it says a mark was left up')
   const p = await probe(f)
   if (p) { const w = Number(/width=(\d+)/.exec(p)?.[1]), h = Number(/height=(\d+)/.exec(p)?.[1]); assert.ok(w > 2880 && h > 1800 + 100, `framed video is taller than one with just the banner: ${w}×${h}`) }
   // The frame stays for the whole clip (it is a still laid over every frame, and once it went after the first one): a corner pixel well into the clip is the frame's dark, not the page's white.
@@ -84,6 +97,7 @@ test('a titled recording is framed: the video is bigger than the clip', async ()
   assert.match(await bad('record', 'start', '--bogus'), /takes --title/)
 })
 test('nothing recorded when nothing changes', async () => {
+  await ok('clear') // the last recording's callout is still up (marks outlive a recording), and it moves
   await ok('record', 'start'); await ok('wait', '200')
   assert.match(await bad('record', 'stop'), /nothing was recorded|frames/)
 })

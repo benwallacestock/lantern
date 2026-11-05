@@ -23,7 +23,7 @@ export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
 type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; scroll?: { x: number; y: number } }
 /** A demo being recorded: every frame the page painted, with when it painted. Assembled on stop. */
-type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string; actions: number }
+type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; captionTop?: boolean; marks: number[]; wrote: number; until: number; title?: string; note?: string; footer?: string; actions: number }
 
 /** ms of recording after a command returns: the page reacting, a transition finishing. */
 export const SETTLE = 900 // ms of frames kept after an action, for the page to settle on screen (the viewer sees the result; the agent's thinking after that is cut)
@@ -57,7 +57,7 @@ export class Page {
   log: string[] = []
   popups: string[] = []
   rec?: Rec
-  marks: { kind: Annotation; target: string; opts?: { text?: string; n?: number } }[] = [] // the annotations the agent set, put back after a navigation
+  marks: { kind: Annotation; target: string; opts?: { text?: string; n?: number; side?: string } }[] = [] // the annotations the agent set, put back after a navigation
   hl = false // a highlight the agent set (as opposed to one a screenshot lit for the picture)
   co = false // a callout is up
   at?: { x: number; y: number } // where the pointer rests
@@ -208,7 +208,7 @@ export class Page {
   get accent() { return this.config.accent || ORANGE }
   private afterLoad() {
     if (this.config.accent) this.fire(ACCENT_JS(this.config.accent))
-    if (this.rec?.caption) this.fire(CAPTION_JS(this.rec.caption)) // a caption outlives a navigation
+    if (this.rec?.caption) this.fire(CAPTION_JS(this.rec.caption, this.rec.captionTop)) // a caption outlives a navigation
     if (this.at) this.fire(CURSOR_JS(this.at.x, this.at.y)) // so does the pointer
     if (this.config.onLoad) this.fire(this.config.onLoad) // the project's own after-load script: a dev login, say
     if (this.marks.length) void this.remark() // and the annotations, where their targets are still on the new page
@@ -287,7 +287,7 @@ export class Page {
     let again = at
     for (let i = 0, last = at; i < 12; i++) {
       await sleep(i ? 100 : 150)
-      const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false))
+      const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false, true))
       if (now.error) break
       again = now
       if (i > 0 && Math.abs(now.x - last.x) < 1 && Math.abs(now.y - last.y) < 1) break
@@ -338,7 +338,7 @@ export class Page {
     await this.moveMouse(at.x, at.y)
     // The pointer took a moment to arrive; if the element moved meanwhile (a scroll or a layout still settling), follow it.
     if (!/^-?\d+,-?\d+$/.test(target.trim())) {
-      const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false)).catch(() => null)
+      const now = await this.evaluate<Spot & { error?: string }>(locateJs(target, false, true)).catch(() => null)
       if (now && !now.error && (Math.abs(now.x - at.x) >= 1 || Math.abs(now.y - at.y) >= 1)) { at = { ...now, name: at.name, matches: at.matches }; await this.moveMouse(at.x, at.y, { settle: 120 }) }
     }
     if (this.rec) { // the ring and the word, as the click lands
@@ -395,7 +395,7 @@ export class Page {
     const at = await this.evaluate<Spot & { error?: string }>(locateJs(target))
     if (at.error || !at.rect) throw new Error(at.error ?? 'could not find that')
     await sleep(150) // it was scrolled into view; locate again so the box starts where it is
-    const again = await this.evaluate<Spot & { error?: string }>(locateJs(target))
+    const again = await this.evaluate<Spot & { error?: string }>(locateJs(target, true, true))
     return { rect: again.rect ?? at.rect, name: at.name ?? '', scroll: again.scroll ?? at.scroll ?? { x: 0, y: 0 }, matches: at.matches }
   }
   /** What the last-located element is, for commands that need a field. */
@@ -563,12 +563,13 @@ export class Page {
         // callout <target> <words> · callout 2 <target> <words> (numbered) · callout off
         if (!rest[0]) return { ok: false, text: 'callout what? `lantern callout <target> <words>` — or `callout off`' }
         if (rest[0] === 'off') { this.co = false; this.marks = this.marks.filter((m) => m.kind !== 'callout'); await this.evaluate(CLEAR_JS('callout')).catch(() => {}); return { ok: true, text: 'callout off' } }
-        let n: number | undefined
+        let n: number | undefined, side: string | undefined
+        for (const s of ['left', 'right', 'above', 'below']) { const i = rest.indexOf('--' + s); if (i >= 0) { side = s; rest.splice(i, 1) } }
         if (/^\d{1,2}$/.test(rest[0]) && rest.length > 2) { n = Number(rest.shift()) }
         if (rest.length < 2) return { ok: false, text: 'callout needs the words: `lantern callout <target> <what to say about it>`' }
         const { rect: r, name } = await this.locate(rest[0])
         const words = rest.slice(1).join(' ')
-        await this.evaluate(ANNOTATE_JS('callout', { text: words, n })).catch(() => {}); this.co = true; this.marks.push({ kind: 'callout', target: rest[0], opts: { text: words, n } })
+        await this.evaluate(ANNOTATE_JS('callout', { text: words, n, side })).catch(() => {}); this.co = true; this.marks.push({ kind: 'callout', target: rest[0], opts: { text: words, n, side } })
         await this.pointerClear(r)
         return { ok: true, text: `callout${n != null ? ` ${n}` : ''} on "${name}": ${words} — it is in screenshots and the recording, follows the element and goes when it does; \`lantern callout off\` ends it` }
       }
@@ -788,18 +789,19 @@ export class Page {
     }
     if (what === 'caption') {
       if (!this.rec) return { ok: false, text: 'not recording — `lantern record start` first' }
-      const text = rest.slice(1).join(' ')
-      this.rec.caption = text === 'off' ? undefined : text
+      // record caption [--top] <text>: along the bottom, or along the top where the app keeps something at the bottom (a toolbar)
+      const words = rest.slice(1); const up = words.includes('--top'); if (up) words.splice(words.indexOf('--top'), 1)
+      const text = words.join(' ')
+      if (!text) return { ok: false, text: 'caption what? `lantern record caption <text>` (`--top` puts it along the top), or `record caption off`' }
+      this.rec.caption = text === 'off' ? undefined : text; this.rec.captionTop = up
       this.rec.marks.push(Date.now())
-      await this.evaluate(CAPTION_JS(this.rec.caption ?? '')).catch(() => {})
-      return { ok: true, text: this.rec.caption ? `caption: ${this.rec.caption}` : 'caption off' }
+      await this.evaluate(CAPTION_JS(this.rec.caption ?? '', up)).catch(() => {})
+      return { ok: true, text: this.rec.caption ? `caption${up ? ' (along the top)' : ''}: ${this.rec.caption}` : 'caption off' }
     }
     if (what === 'stop') {
       const r = this.rec; if (!r) return { ok: false, text: 'not recording' }
       this.rec = undefined
-      this.hl = false
-      this.co = false
-      this.marks = []; await this.evaluate(CAPTION_JS('') + ';' + CLEAR_JS()).catch(() => {})
+      await this.evaluate(CAPTION_JS('')).catch(() => {}) // the caption goes with the recording; annotations stay, for a still of the end (`lantern clear`)
       await this.doneWithFrames()
       await sleep(200) // the last frames are still being written
       // Nothing happened: only the opening frame, or a couple of screencast frames that are all the same picture.
@@ -853,7 +855,8 @@ export class Page {
         catch (e) { return { ok: false, text: `could not assemble the video without ffmpeg: ${(e as Error).message} (frames kept in ${r.dir}; brew install ffmpeg, or set LANTERN_FFMPEG)` } }
       }
       fs.rmSync(r.dir, { recursive: true, force: true })
-      return { ok: true, text: `${out}\n(${secs.toFixed(1)}s of video, from ${r.frames.length} frames the page painted${how})` }
+      const left = this.marks.length ? `\n${this.marks.length} annotation${this.marks.length === 1 ? ' is' : 's are'} still on the page, for a still of the end — \`lantern clear\` takes ${this.marks.length === 1 ? 'it' : 'them'} off` : ''
+      return { ok: true, text: `${out}\n(${secs.toFixed(1)}s of video, from ${r.frames.length} frames the page painted${how})${left}` }
     }
     return { ok: false, text: 'usage: lantern record start | caption <text> | stop' }
   }

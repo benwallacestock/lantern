@@ -165,6 +165,19 @@ test('shadow DOM: the snapshot lists what is inside, and targets reach it', asyn
   await ok('fill', '#sname', 'from outside'); assert.equal(await ok('get', 'value', '#sname'), 'from outside')
   await ok('click', 'text=Shadow button'); assert.equal(await ok('text', '#out'), 'shadow clicked: from outside')
 })
+test('a click goes to the button it found, not to a tooltip the pointer raised that reads the same', async () => {
+  await ok('open', app.url + '/tooltip')
+  assert.match(await ok('click', 'text=Finish face'), /clicked "Finish face"/)
+  assert.equal(await ok('eval', "document.getElementById('out').textContent"), 'finished')
+  // and a button with no name at all is said by what it is beside, so the reply tells one such button from another
+  assert.match(await ok('click', '#kebab'), /clicked "unnamed button by /)
+})
+test('a callout goes on the side asked for', async () => {
+  await ok('open', app.url + '/')
+  const side = async (flag: string) => { await ok('callout', '700,450', 'Here', flag); const r = await ok('eval', "(() => { const l = document.querySelector('.__l-callout-label').getBoundingClientRect(); return Math.round(l.left + l.width / 2) + ',' + Math.round(l.top + l.height / 2) })()"); await ok('clear'); return r.split(',').map(Number) }
+  const [lx] = await side('--left'), [rx] = await side('--right'), [, ay] = await side('--above'), [, by] = await side('--below')
+  assert.ok(lx < 700 && rx > 700 && ay < 450 && by > 450, `left ${lx}, right ${rx}, above ${ay}, below ${by}`)
+})
 test('annotations take a place as well as an element, for what is drawn on a canvas: a spot x,y or a region x,y,w,h', async () => {
   await ok('open', app.url + '/')
   assert.match(await ok('callout', '400,300', 'Drawn here'), /callout on "the spot 400,300": Drawn here/)

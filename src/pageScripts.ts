@@ -94,18 +94,23 @@ export const SNAPSHOT_JS = String.raw`
  * Find what a click or fill is aimed at — a ref from the last snapshot, "text=Exact label", or a CSS selector —
  * scroll it into view, and say where its middle is. Open shadow roots are searched too. Returns
  * { x, y, rect, name, matches, scroll } or { error }, and { covered } when something else would take the click.
+ * `same`: measure the element the last locate found, if it is still on the page, instead of looking for the target again.
  */
-export const locateJs = (target: string, scroll = true) => String.raw`
+export const locateJs = (target: string, scroll = true, same = false) => String.raw`
 (() => {
-  const t = ${JSON.stringify(target)}, scroll = ${scroll}
+  const t = ${JSON.stringify(target)}, scroll = ${scroll}, same = ${same}
   const clean = (s) => (s || '').replace(/\s+/g, ' ').trim()
   const isMine = (e) => e.id && String(e.id).startsWith('__lantern')
   // Every element in the document and in every open shadow root, in order.
   const deep = (root, out) => { for (const e of root.querySelectorAll('*')) { if (isMine(e)) continue; out.push(e); if (e.shadowRoot) deep(e.shadowRoot, out) } return out }
   const q = (root, sel) => { const hit = root.querySelector(sel); if (hit) return hit; for (const e of root.querySelectorAll('*')) if (e.shadowRoot) { const h = q(e.shadowRoot, sel); if (h) return h } return null }
   let el = null, matches = 1
+  // Measuring again the element already found (while a scroll settles, or once the pointer has arrived): the same one,
+  // not whatever now reads those words — the pointer arriving can raise a tooltip that says exactly what the button does.
+  const before = same && window.__lantern && window.__lantern.last
   try {
-    if (/^e\d+$/.test(t)) { el = (window.__lantern && window.__lantern.refs && window.__lantern.refs.get(t)) || null; if (!el) return { error: 'no element ' + t + ' — refs come from the last snapshot; take a new one' } }
+    if (before && before.isConnected) el = before
+    else if (/^e\d+$/.test(t)) { el = (window.__lantern && window.__lantern.refs && window.__lantern.refs.get(t)) || null; if (!el) return { error: 'no element ' + t + ' — refs come from the last snapshot; take a new one' } }
     else if (t.startsWith('text=')) {
       const want = clean(t.slice(5)).toLowerCase()
       const all = deep(document.body, []).filter((e) => e.getBoundingClientRect().width > 0)
@@ -135,7 +140,7 @@ export const locateJs = (target: string, scroll = true) => String.raw`
     const related = (a, b) => a === b || a.contains(b) || b.contains(a) || (a.shadowRoot && a.shadowRoot.contains(b)) || (b.shadowRoot && b.shadowRoot.contains(a)) || (lab && (lab.control === b || lab.contains(b)))
     if (at && !isMine(at) && !related(at, el)) covered = at.tagName.toLowerCase() + (at.id ? '#' + at.id : '') + (at.className && typeof at.className === 'string' ? '.' + at.className.trim().split(/\s+/).slice(0, 2).join('.') : '')
   }
-  const name = clean(el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || (el.labels && el.labels.length && [...el.labels].map((l) => l.innerText).join(' ')) || (el.tagName === 'INPUT' && /^(submit|button|reset)$/i.test(el.type) && el.value) || el.getAttribute('title') || el.tagName.toLowerCase()).slice(0, 60)
+  const name = clean(el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || (el.labels && el.labels.length && [...el.labels].map((l) => l.innerText).join(' ')) || (el.tagName === 'INPUT' && /^(submit|button|reset)$/i.test(el.type) && el.value) || el.getAttribute('title') || (() => { let p = el.parentElement, near = ''; for (let i = 0; i < 4 && p && !near; i++, p = p.parentElement) near = clean(p.innerText); return 'unnamed ' + el.tagName.toLowerCase() + (near ? ' by ' + near.slice(0, 36) : '') })()).slice(0, 60)
   return { x: cx, y: cy, rect: { x: r.left, y: r.top, width: r.width, height: r.height }, name, matches, covered, scroll: { x: scrollX, y: scrollY } }
 })()`
 

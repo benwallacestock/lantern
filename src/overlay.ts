@@ -25,6 +25,7 @@ export const UI_JS = String.raw`(() => {
     '.__l-badge { width: 26px; height: 26px; border-radius: 50%; background: ' + ACCENT + '; color: #16161a; font: 800 14px/26px ' + FONT + '; text-align: center; box-shadow: 0 0 0 3px #fff, 0 3px 10px rgba(0,0,0,.35); animation: __l-pop .22s ease-out; }',
     '.__l-blur { backdrop-filter: blur(14px) saturate(.5); -webkit-backdrop-filter: blur(14px) saturate(.5); background: rgba(128,128,128,.22); border-radius: 8px; }',
     '.__l-caption { left: 50%; bottom: 28px; transform: translateX(-50%); padding: 10px 18px; font: 600 16px/1.3 ' + FONT + '; max-width: 80vw; text-align: center; }',
+    '.__l-caption.__l-caption-up { bottom: auto; top: 28px; }',
     '.__l-label { max-width: 300px; padding: 9px 13px; font: 600 14px/1.35 ' + FONT + '; display: flex; align-items: flex-start; gap: 8px; animation: __l-pop .22s ease-out; }',
     '.__l-label .__l-n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: ' + ACCENT + '; color: #16161a; font-weight: 800; font-size: 13px; line-height: 22px; text-align: center; }',
     '.__l-line { left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; }',
@@ -147,7 +148,9 @@ export const UI_JS = String.raw`(() => {
         const fits = (s) => s.lx >= 4 && s.ly >= 4 && s.lx + lw <= innerWidth - 4 && s.ly + lh <= innerHeight - 4 && clear(s)
         const cost = (s) => { let c = 0; for (const [fx, fy] of [[.1, .5], [.5, .5], [.9, .5], [.5, .1], [.5, .9]]) { const hit = document.elementFromPoint(s.lx + lw * fx, s.ly + lh * fy); if (hit && hit !== document.body && hit !== document.documentElement && !hit.classList.contains('__lantern') && (hit.innerText || '').trim()) c++ } return c }
         const key = Math.round(r.left) + ':' + Math.round(r.top)
-        if (!chosen || key !== at || !fits(chosen)) { let best = null, bestCost = 99; for (const s of spots) { if (!fits(s)) continue; const c = cost(s); if (c < bestCost) { bestCost = c; best = s } } chosen = best || spots.find(fits) || spots[2]; at = key }
+        const want = { right: 0, left: 1, below: 2, above: 3 }[o.side] // asked for a side: that one, if the label fits there
+        if (want != null && fits(spots[want])) { chosen = spots[want]; at = key }
+        else if (!chosen || key !== at || !fits(chosen)) { let best = null, bestCost = 99; for (const s of spots) { if (!fits(s)) continue; const c = cost(s); if (c < bestCost) { bestCost = c; best = s } } chosen = best || spots.find(fits) || spots[2]; at = key }
         const { lx, ly, ax, ay } = chosen
         place(label, lx, ly)
         const bx = clamp(ax, lx, lx + lw), by = clamp(ay, ly, ly + lh), mx = (bx + ax) / 2, my = (by + ay) / 2
@@ -158,7 +161,7 @@ export const UI_JS = String.raw`(() => {
   }
 
   window.__lantern_ui = {
-    caption(text) { if (!text) { caption?.remove(); caption = null; return } if (!caption || !caption.isConnected) { caption = mk('div', '__l-top __l-transient __l-dark __l-caption'); caption.id = '__lantern_caption' } caption.textContent = text },
+    caption(text, top) { if (!text) { caption?.remove(); caption = null; return } if (!caption || !caption.isConnected) { caption = mk('div', '__l-top __l-transient __l-dark __l-caption'); caption.id = '__lantern_caption' } caption.textContent = text; caption.classList.toggle('__l-caption-up', !!top) },
     cursor(x, y, ms) {
       window.__lantern_at = { x, y }
       if (keys && keys.isConnected) { keys.style.transition = 'left ' + ms + 'ms ' + CURVE + ', top ' + ms + 'ms ' + CURVE; keys.style.left = (x + 22) + 'px'; keys.style.top = (y + 52) + 'px' }
@@ -198,7 +201,7 @@ export const UI_JS = String.raw`(() => {
 const call = (expr: string) => `${UI_JS}; window.__lantern_ui.${expr}`
 
 /** A caption along the bottom of the page, until the next one (or '' for none). */
-export const CAPTION_JS = (text: string) => call(`caption(${JSON.stringify(text)})`)
+export const CAPTION_JS = (text: string, top = false) => call(`caption(${JSON.stringify(text)}, ${top})`)
 /** The pointer, gliding to x,y over ms. */
 export const CURSOR_JS = (x: number, y: number, ms = 250) => call(`cursor(${x}, ${y}, ${ms})`)
 /** Two rings spreading from a click. */
@@ -210,7 +213,7 @@ export const ANNOTATIONS: Annotation[] = ['highlight', 'callout', 'badge', 'ring
 /** An annotation on the element the last locate found; evaluates to its id (0 when there was no element). */
 /** Stand a see-through box at x,y (w×h, viewport pixels) for the next annotation to go on. */
 export const ANCHOR_JS = (x: number, y: number, w: number, h: number) => call(`anchor(${x}, ${y}, ${w}, ${h})`)
-export const ANNOTATE_JS = (kind: Annotation, opts: { text?: string; n?: number } = {}) => call(`add(${JSON.stringify(kind)}, ${JSON.stringify(opts)})`)
+export const ANNOTATE_JS = (kind: Annotation, opts: { text?: string; n?: number; side?: string } = {}) => call(`add(${JSON.stringify(kind)}, ${JSON.stringify(opts)})`)
 export const REMOVE_JS = (id: number) => call(`remove(${id})`)
 /** Every annotation, or every one of a kind, off. */
 export const CLEAR_JS = (kind?: Annotation) => call(`clear(${kind ? JSON.stringify(kind) : ''})`)

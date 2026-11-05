@@ -28,7 +28,7 @@ The `lantern` skill covers the commands themselves; this one is how to make a re
 lantern size desktop                                   # 1440×900 — or phone, tablet, laptop, wide
 lantern open /the/page && lantern wait 2000
 lantern record start --title "Estimating a walk" --note "TRAIL-7"   # a title frames the video like a still: glyph, title, footer
-lantern record caption "Open the order and switch it to express delivery"
+lantern record caption "Open the order and switch it to express delivery"   # --top puts it along the top, clear of a toolbar at the bottom
 lantern click "text=Order #1042"
 lantern wait 1500
 lantern click e42                                      # refs from `lantern snapshot`
@@ -46,6 +46,12 @@ Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the d
 ## What goes wrong
 
 - A step flashes past: you acted before the caption, or didn't `wait` for the result. Caption, act, wait.
+- The clip ran over: budget it before the take. A click is about two seconds on camera, a caption holds at least 2.5, typing is ten characters a second, and every `wait` counts in full; ten clicks and five captions are already past thirty seconds with no waits at all. Cut waits first, then steps.
+- The take is slow to perform, or drifts from the rehearsal: run it as one shell script, command after command with no thinking between, and pick up refs inside it (`lantern snapshot | grep "Fill Panels"`) rather than from memory. Shorter takes, and the same every time.
+- The caption sits on the app's own toolbar or a bar along the bottom: `lantern record caption --top "…"` puts it along the top instead.
+- A callout's words land on the thing beside it (on a canvas lantern can't see what is drawn there): say which side, `lantern callout 707,447,135,80 "The new array" --left` (or `--right`, `--above`, `--below`).
+- A tooltip is in the last frames: the pointer is still on the control you last clicked. `lantern hover` somewhere neutral before the final `wait`.
+- The view cuts from one thing to another (an app that switches cameras or pages in one frame): that is the app, not the recording; set the caption before the step so the viewer knows what they are about to be looking at.
 - The viewer can't tell what was clicked: you used `eval` or `fill` on something a user would click. Use the mouse commands.
 - A box hangs over nothing: a highlight outlived its element — it goes when the element does, but turn it off when you move on.
 - The pointer sits on the thing you're showing: `highlight` moves it out of the box; otherwise `hover` somewhere neutral first.
@@ -55,4 +61,5 @@ Then attach it: `gh pr edit <pr> --attach './tmp/lantern/demo-….mp4#What the d
 - `already recording`: a previous recording was never stopped. `lantern record stop`, then start again.
 - `the size is fixed while recording`: set `size` before `record start`; the size you set stays after `record stop`.
 - A still taken while recording leaves the caption and keycaps out, so screenshots for the PR can be taken mid-flow.
+- Marks (`callout`, `highlight`, `ring`…) stay on the page after `record stop`, so a still of the end can be taken with them; `lantern clear` takes them off.
 - `could not assemble the video without ffmpeg`: Chrome couldn't encode it; `brew install ffmpeg` (or `apt install ffmpeg`), and record again.
