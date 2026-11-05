@@ -2,6 +2,13 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/); before 1.0 a minor bump may change behaviour. Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 0.10.0 — 2026-11-05
+
+### Added
+- Annotations take a place as well as an element, for what is drawn on a canvas
+  - `callout`, `ring`, `arrow`, `highlight`, `badge` and `blur` take x,y (a spot) or x,y,w,h (a region) in viewport pixels, as `click` does, so a face drawn on a map or a 3D scene can be marked without an element to hang it on. A badge on a spot sits on it.
+  - The skill's canvas guidance says so.
+
 ## 0.9.1 — 2026-11-05
 
 ### Fixed
