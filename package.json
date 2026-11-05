@@ -1,7 +1,7 @@
 {
   "name": "@benwallacestock/lantern",
   "version": "1.0.0",
-  "description": "A browser for coding agents: drive the app, take screenshots ready for a pull request, record a demo with captions and a visible pointer.",
+  "description": "Screenshots and demo videos for the pull requests your agent opens: framed before/after pairs, demos with captions and a visible pointer, and a real browser to check the change in.",
   "license": "MIT",
   "type": "module",
   "bin": {

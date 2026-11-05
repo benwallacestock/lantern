@@ -1,18 +1,20 @@
 <p align="center"><img src="logo.svg" width="128" alt="lantern"></p>
 <h1 align="center">lantern</h1>
-<p align="center"><b>Let your agent see in the dark.</b><br>A command-line browser for coding agents.</p>
+<p align="center"><b>Bringing light to the changes your agent makes.</b><br>Screenshots and demo videos for the pull requests your agent opens, made while it works.</p>
 
 > **Written by an AI.** All of lantern was written by Claude, with human direction, and it still needs checking. It has an end-to-end test suite and is used every day, but it is young: point it only at your own app and sites you control.
 
 ## Why
 
-A command line is the best thing you can hand an agent: nothing to install into an editor, no extension, no window to keep open, just commands it already knows how to run. lantern is a browser built that way. It also means it works where there is no window at all: a CI job, a cloud session, a bot on a server.
+When an agent writes the code and opens the pull request, nobody has seen the change run. The reviewer gets a diff and a summary from the thing that made it, and has to pull the branch to find out what really happened.
 
-That buys three things, in the order they tend to matter:
+lantern lets the agent show its work. That buys three things, in the order they tend to matter:
 
-- **Confidence.** An agent that can only read code is guessing whether a change works. With a browser it opens the page, clicks the thing, reads what happened and checks the console, before it says it's done.
-- **Evidence.** A review goes faster with a picture than a paragraph: a framed before/after pair, a screenshot with the change called out, a short demo video with captions. The agent makes them on the way through, and they're ready to drop into the pull request.
+- **Evidence.** A review goes faster with a picture than a paragraph: a framed before/after pair, a screenshot with the change called out, a short demo video with captions, a visible pointer and the agent's thinking cut out. The agent makes them in the background as it works, and they're ready to drop into the pull request.
+- **Confidence.** To take the picture, the agent has to open the page. So it clicks the thing, reads what happened and checks the console before it says it's done, instead of guessing from the code.
 - **A window for you.** `lantern watch` shows the agent's page live, so you can see what it's doing without it stopping to tell you.
+
+It's a command line because that's the best thing you can hand an agent: nothing to install into an editor, no extension, no window to keep open, just commands it already knows how to run. It also means it works where there is no window at all: a CI job, a cloud session, a bot on a server.
 
 ## Install
 
@@ -41,7 +43,7 @@ The plugin brings only the skills; the first time Claude needs the CLI, the skil
 
 ## What it is
 
-lantern is a CLI. Claude Code, Codex and anything else that can run a shell command use it to drive a real Chrome page: open, click, fill, read what it says. It takes screenshots that are ready for a pull request, records demo videos with captions and a visible pointer, and lets you watch the agent's page live from your own browser. It ships with skills that teach those agents when and how to use it.
+lantern is a CLI. Claude Code, Codex and anything else that can run a shell command use it to make the evidence for a pull request: screenshots ready to drop in, framed before/after pairs, and demo videos with captions and a visible pointer. To get them it drives a real Chrome page (open, click, fill, read what it says), which also lets the agent check its own work, and you can watch that page live from your own browser. It ships with skills that teach those agents when and how to use it.
 
 lantern grew out of [forest](https://github.com/SpruceEco/forest), Spruce's tool for running one tree per branch, where its agent browser lives. This is that browser on its own, for any project.
 
@@ -65,11 +67,11 @@ Each command is a short-lived process. The first one starts a daemon for the pro
 
 ## What it does
 
-- **Drive the page** as a person would: real mouse and key events through the DevTools protocol, so the page sees mousedown, keydown and input, not synthetic clicks. `snapshot` lists what can be acted on, with refs; `click`, `fill`, `press`, `drag`, `scroll`, `select`, `check`, `upload`, `hover`; `text`, `get`, `is`, `wait`, `console`, `eval`.
 - **Screenshots at 2x**, like a Retina screen: the whole viewport, the page with one element glowing, a crop of one element, or the whole page however long. `size` picks phone, tablet, laptop, desktop or wide.
 - **Annotations** that follow their element, in screenshots and recordings: a callout (the words beside it, joined by a line, the element lit, numbered if you like), a highlight, a numbered badge for the steps of a picture, a ring around something small, an arrow, and a blur over anything that must not be shown.
 - **Frames for a pull request**: one picture, a before/after pair, or numbered steps, with a title drawn in, rounded corners, a shadow, and the branch and time in the footer. Every video sits in the same banner, and a recording started with `--title` gets the title bar too.
 - **Demo videos**: frames are kept only while a command runs and for a beat after, so the agent's thinking between commands is cut; captions hold for at least 2.5 seconds; the pointer glides to each target; a ring and a little mouse show each click; a keycap strip shows typing; a pill shows scrolling. ffmpeg assembles an MP4 when it is installed; otherwise Chrome encodes the video itself (MP4 where it can, WebM otherwise; GitHub plays both inline).
+- **Drive the page** as a person would: real mouse and key events through the DevTools protocol, so the page sees mousedown, keydown and input, not synthetic clicks. `snapshot` lists what can be acted on, with refs; `click`, `fill`, `press`, `drag`, `scroll`, `select`, `check`, `upload`, `hover`; `text`, `get`, `is`, `wait`, `console`, `eval`.
 
 - **Several at once**: `LANTERN_NAME=review-2 lantern …` (or `lantern --name review-2 …`) is a lantern of its own on the same project — its own browser, login and `tmp/lantern/review-2/` — so parallel agents never fight over one page; `lantern status` lists them and `lantern watch --all` shows them side by side.
 - **A live view** for a person: `lantern watch` prints the URL of a page (`--open` opens it) that shows what the agent's page paints, with a line saying what it just did. Tools that embed lantern (a panel in an editor or an app) get the same frames as JSON lines over the daemon's socket.
