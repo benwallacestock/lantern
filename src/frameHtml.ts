@@ -18,7 +18,7 @@ export const titleHtml = (title: string | undefined) => (title ? `<h1>${esc(titl
 /** The footer: your own words, or lantern · note · branch · time; "made with lantern" at the right unless the mark is off. */
 export function footHtml(f: Foot): string {
   const accent = f.accent ?? ORANGE
-  const left = f.footer !== undefined ? `<span>${esc(f.footer)}</span>` : [`<b>lantern</b>`, f.note ? `<span>${esc(f.note)}</span>` : '', f.branch ? `<span class="mono">${esc(f.branch)}</span>` : '', `<span>${esc(when())}</span>`].filter(Boolean).join('<span>·</span>')
+  const left = f.footer !== undefined ? `<span class="cut">${esc(f.footer)}</span>` : [`<b>lantern</b>`, f.note ? `<span class="note">${esc(f.note)}</span>` : '', f.branch ? `<span class="cut mono">${esc(f.branch)}</span>` : '', `<span>${esc(when())}</span>`].filter(Boolean).join('<span>·</span>')
   return `<div class="foot">${left}${f.mark ? `<span class="made">${GLYPH(accent)}made with lantern</span>` : ''}</div>`
 }
 
@@ -32,8 +32,12 @@ export function frameCss(u: number, accent: string, rounded: boolean): string {
     body { display: inline-block; font-family: -apple-system, system-ui, sans-serif; color: #f2f2f4; }
     .frame { display: inline-flex; flex-direction: column; gap: calc(14px * var(--u)); padding: calc(28px * var(--u)) calc(32px * var(--u)) calc(22px * var(--u)); background: linear-gradient(160deg, #26262c, #15151a); ${rounded ? 'border-radius: calc(18px * var(--u));' : ''} }
     h1 { margin: 0; font-size: calc(18px * var(--u)); font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* width 0 + min-width 100%: the footer wraps to the pictures' width instead of widening the frame to fit itself */
-    .foot { display: flex; flex-wrap: wrap; gap: 4px calc(12px * var(--u)); align-items: center; font-size: calc(10.5px * var(--u)); color: #a0a0aa; width: 0; min-width: 100%; }
+    /* width 0 + min-width 100%: the footer keeps to the pictures' width instead of widening the frame to fit itself. One
+       line: what can be long (a branch name, a note, your own words) is cut short with an ellipsis; the rest stays whole. */
+    .foot { display: flex; flex-wrap: nowrap; gap: calc(12px * var(--u)); align-items: center; font-size: calc(10.5px * var(--u)); color: #a0a0aa; width: 0; min-width: 100%; white-space: nowrap; }
+    .foot > * { flex: none; }
+    .foot .cut { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .foot .note { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; } /* whole unless it is itself long: the branch gives way first */
     .foot b { color: ${accent}; }
     .foot .mono { font-family: ui-monospace, Menlo, monospace; }
     .made { margin-left: auto; display: inline-flex; align-items: center; gap: calc(6px * var(--u)); color: #c8c8d0; font-weight: 600; line-height: 1; }

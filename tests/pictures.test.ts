@@ -50,6 +50,9 @@ test('frame: one picture, a pair, options', async () => {
   out = await ok('frame', a, b, '--side', '--title', 'Side'); f = firstLine(out); assert.ok(pngSize(f).w > pair.w * 1.8, 'side by side is wider')
   out = await ok('frame', a, '--out', 'my.png'); assert.ok(fs.existsSync(path.join(proj, 'tmp', 'lantern', 'my.png')), 'a bare --out name stays in the pictures folder'); assert.match(out, /untitled/)
   out = await ok('frame', a, '--title', 'With my footer', '--footer', 'Just my words'); assert.ok(fs.existsSync(firstLine(out)))
+  // A footer too long for the picture (a long branch name, say) is cut short on its one line: the frame is no taller or wider for it.
+  const short = pngSize(firstLine(out)), long = pngSize(firstLine(await ok('frame', a, '--title', 'With my footer', '--footer', 'benwallace-stock/spr-0000-' + 'a-very-long-branch-name-'.repeat(20))))
+  assert.deepEqual(long, short)
   assert.match(await bad('frame'), /give a screenshot/)
   assert.match(await bad('frame', 'nope.png'), /no such image/)
 })
