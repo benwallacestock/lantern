@@ -71,7 +71,7 @@ export class Page {
   config: Config = {}
   private stateFile?: string
   /** Whoever is watching the page: each gets every frame it paints (at most ~8 a second) and a line for each action. */
-  watchers = new Set<{ frame?: (jpeg: Buffer, url: string) => void; did?: (text: string) => void }>()
+  watchers = new Set<{ frame?: (jpeg: Buffer, url: string) => void; did?: (text: string) => void; closed?: (why: string) => void }>()
   lastFrame?: Buffer
   private sentAt = 0
   private screencast = false

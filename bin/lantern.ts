@@ -89,7 +89,7 @@ async function retireOld() {
   const idle = await connect({ cmd: 'idle' })
   if (idle?.ok) { try { const s = JSON.parse(idle.text); if (s.recording || s.idleMs < (Number(process.env.LANTERN_RETIRE_IDLE_MS ?? '') || (process.env.LANTERN_RETIRE_IDLE_MS === '0' ? 0 : 5 * 60_000))) return } catch {} }
   process.stderr.write(`lantern was updated to ${version()}; restarting its browser\n`)
-  await connect({ cmd: 'close' })
+  await connect({ cmd: 'close', why: 'updated' })
   for (let i = 0; i < 40 && pid && alive(pid); i++) await sleep(250)
 }
 

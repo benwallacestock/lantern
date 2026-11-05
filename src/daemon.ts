@@ -37,9 +37,17 @@ const log = (...a: unknown[]) => console.log(stamp(), ...a)
 let stopping: Promise<void> | undefined
 let owned = false // the socket and pid file are ours to remove only once we have written them
 /** Stop taking commands, close Chrome and wait for it to let go of the profile, so the next daemon can start at once. */
+/** Why lantern is closing, in words for whoever is watching: it is not always that nothing was asked of it. */
+const closing = (why: string) =>
+  why === 'asked to close' ? 'lantern was closed (`lantern close`)'
+  : why === 'updated' ? 'lantern closed to restart on a newer version'
+  : /^no command for/.test(why) ? `lantern closed itself: ${why}`
+  : /^chrome exited/.test(why) ? 'lantern closed: its browser exited'
+  : `lantern closed (${why})`
 function stop(why: string): Promise<void> {
   if (stopping) return stopping
   log('shutting down:', why)
+  for (const w of page?.watchers ?? []) { try { w.closed?.(closing(why)) } catch {} } // told why, before the line drops
   try { server?.close() } catch {}
   try { preview?.close() } catch {}
   try { if (owned) { fs.rmSync(P.sock, { force: true }); fs.rmSync(P.pid, { force: true }); fs.rmSync(P.build, { force: true }) } } catch {}
@@ -61,7 +69,7 @@ function shutdown(why: string) { void stop(why).then(() => setTimeout(() => proc
 async function dispatch(req: any): Promise<Reply> {
   switch (req.cmd) {
     case 'status': { const others = instances(root).filter((n) => n !== (P.name ?? '')); return { ok: true, text: `lantern${P.name ? ` "${P.name}"` : ''} is up for ${root}\n  pid ${process.pid}, chrome pid ${chrome?.proc.pid}, log ${P.log}\n  ${page ? `page at ${await page.where()}${page.rec ? ` (recording, ${page.rec.frames.length} frames)` : ''}` : 'no page open yet'}${others.length ? `\n  also on this project: ${others.map((n) => n || '(unnamed)').join(', ')} — \`lantern watch --all\` shows them side by side` : ''}` } }
-    case 'close': await stop('asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
+    case 'close': await stop(req.why === 'updated' ? 'updated' : 'asked to close'); setTimeout(() => process.exit(0), 100); return { ok: true, text: 'closed' }
     case 'frame': return frame(chrome!, { note: CONFIG.note, footer: CONFIG.footer, accent: CONFIG.accent, mark: CONFIG.watermark !== false, ...req, ...(CONFIG.branch === false ? { branch: undefined } : {}) }, P.out)
     case 'preview': { const url = await previewUrl(); return { ok: true, text: url } }
     case 'browser': {
@@ -104,10 +112,10 @@ async function relaunch(): Promise<string> {
   return `(the page stopped taking input after that navigation, so lantern restarted its browser${url ? ` and opened ${url} again` : ''}; the step above was done, the next one is safe)\n`
 }
 
-/** A watcher over the socket (forest's panel, say): JSON lines — {frame, url} as the page paints, {did} as commands land. */
+/** A watcher over the socket (forest's panel, say): JSON lines — {frame, url} as the page paints, {did} as commands land, {closed} with the reason when lantern closes. */
 async function watch(conn: net.Socket) {
   const p = await thePage()
-  const w = { frame: (jpeg: Buffer, url: string) => { if (!conn.destroyed && conn.writableLength < 1_500_000) conn.write(JSON.stringify({ frame: jpeg.toString('base64'), url }) + '\n') }, did: (text: string) => { if (!conn.destroyed) conn.write(JSON.stringify({ did: text }) + '\n') } }
+  const w = { frame: (jpeg: Buffer, url: string) => { if (!conn.destroyed && conn.writableLength < 1_500_000) conn.write(JSON.stringify({ frame: jpeg.toString('base64'), url }) + '\n') }, did: (text: string) => { if (!conn.destroyed) conn.write(JSON.stringify({ did: text }) + '\n') }, closed: (why: string) => { if (!conn.destroyed) conn.write(JSON.stringify({ closed: why }) + '\n') } }
   p.watchers.add(w)
   await p.wantFrames()
   if (p.lastFrame) w.frame(p.lastFrame, p.currentUrl)
@@ -136,7 +144,7 @@ function previewUrl(): Promise<string> {
     } else if (req.url === '/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
       let last = p.currentUrl
-      const w = { did: (text: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ did: text, url: p.currentUrl })}\n\n`) }, frame: (_j: Buffer, url: string) => { if (!res.destroyed && url !== last) { last = url; res.write(`data: ${JSON.stringify({ url })}\n\n`) } } }
+      const w = { did: (text: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ did: text, url: p.currentUrl })}\n\n`) }, frame: (_j: Buffer, url: string) => { if (!res.destroyed && url !== last) { last = url; res.write(`data: ${JSON.stringify({ url })}\n\n`) } }, closed: (why: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ closed: why })}\n\n`) } }
       p.watchers.add(w)
       res.write(`data: ${JSON.stringify({ url: p.currentUrl })}\n\n`)
       req.on('close', () => { p.watchers.delete(w) })
@@ -167,9 +175,9 @@ footer{display:flex;gap:14px;align-items:center;padding:8px 14px;border-top:1px 
 <header><svg viewBox="0 0 256 256" aria-hidden="true"><rect width="256" height="256" rx="56" fill="#16161a"/><circle cx="128" cy="146" r="92" fill="#ff7a2f" opacity=".25"/><path d="M100 66 C100 38, 156 38, 156 66" fill="none" stroke="#e8e8ee" stroke-width="8" stroke-linecap="round"/><path d="M90 76 L166 76 L158 60 L98 60 Z" fill="#e8e8ee"/><rect x="84" y="74" width="88" height="12" rx="5" fill="#e8e8ee"/><rect x="92" y="86" width="72" height="92" rx="12" fill="#ff7a2f" fill-opacity=".7" stroke="#e8e8ee" stroke-width="8"/><path d="M128 112 C140 126, 146 136, 146 146 C146 157, 138 164, 128 164 C118 164, 110 157, 110 146 C110 136, 116 126, 128 112 Z" fill="#fff1c2"/><rect x="84" y="178" width="88" height="14" rx="6" fill="#e8e8ee"/><rect x="100" y="192" width="56" height="10" rx="4" fill="#c9c9d2"/></svg><b>lantern</b><span class="name">${name}</span><span class="live"><i></i>live</span></header>
 <main><img src="/stream" alt="the page lantern is driving"></main>
 <footer><span id="did">watching — the picture moves as the page changes</span><span id="url">${p.currentUrl}</span></footer>
-<script>const es=new EventSource('/events');es.onmessage=(e)=>{const d=JSON.parse(e.data);if(d.did)document.getElementById('did').textContent=d.did;if(d.url)document.getElementById('url').textContent=d.url}
+<script>let why='';const es=new EventSource('/events');es.onmessage=(e)=>{const d=JSON.parse(e.data);if(d.closed)why=d.closed;if(d.did)document.getElementById('did').textContent=d.did;if(d.url)document.getElementById('url').textContent=d.url}
 const im=document.querySelector('img'),cv=document.createElement('canvas');setInterval(()=>{if(im.naturalWidth&&im.isConnected){cv.width=im.naturalWidth;cv.height=im.naturalHeight;cv.getContext('2d').drawImage(im,0,0)}},500)
-es.onerror=()=>{es.close();document.body.classList.add('closed');if(cv.width)im.replaceWith(cv);else im.remove();document.querySelector('.live').lastChild.textContent='closed';document.getElementById('did').textContent='lantern has closed (no command for a while) — run lantern watch again for a new view'}</script>`)
+es.onerror=()=>{es.close();document.body.classList.add('closed');if(cv.width)im.replaceWith(cv);else im.remove();document.querySelector('.live').lastChild.textContent='closed';document.getElementById('did').textContent=(why||'lantern has closed')+' — run lantern watch again for a new view'}</script>`)
     }
   })
   return new Promise((r) => preview!.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${(preview!.address() as net.AddressInfo).port}/`)))

@@ -186,6 +186,15 @@ const socketWatcher = async () => {
   c.write(JSON.stringify({ cmd: 'watch' }) + '\n')
   return { lines, close: () => c.destroy() }
 }
+test('a watcher is told why lantern closed: here, because it was asked to, not for want of commands', async () => {
+  await ok('open', app.url + '/')
+  const w = await socketWatcher()
+  const page = await (await fetch(firstLine(await ok('watch')))).text()
+  assert.doesNotMatch(page, /no command for a while/, 'the page does not guess at a reason')
+  await ok('close'); await pause(300)
+  assert.ok(w.lines.some((l) => /lantern was closed \(`lantern close`\)/.test(l.closed ?? '')), `a closed line with the reason: ${JSON.stringify(w.lines.filter((l) => !l.frame))}`)
+  w.close()
+})
 test('two asking for the page at the same moment at the start get one page, and it is the one in front', async () => {
   await ok('close'); await ok('watch') // the daemon is up, with no page yet
   const ws = await Promise.all([socketWatcher(), socketWatcher()]) // as a panel connects while the first command lands
