@@ -24,7 +24,7 @@ export type Reply = { ok: boolean; text: string }
 type Rect = { x: number; y: number; width: number; height: number }
 type Spot = { x: number; y: number; name: string; rect?: Rect; matches?: number; covered?: string | null; blocked?: { part: number; by: string } | null; scroll?: { x: number; y: number } }
 /** A demo being recorded: every frame the page painted, with when it painted. Assembled on stop. */
-type Rec = { dir: string; frames: { file: string; t: number }[]; caption?: string; captionTop?: boolean; marks: number[]; wrote: number; until: number; extra: number; title?: string; note?: string; footer?: string; actions: number }
+type Rec = { dir: string; frames: { file: string; t: number }[]; waits: { from: number; to: number }[]; caption?: string; captionTop?: boolean; marks: number[]; wrote: number; until: number; extra: number; title?: string; note?: string; footer?: string; actions: number }
 
 /** ms of recording after a command returns: the page reacting, a transition finishing. */
 /** The pixels of a small PNG as Chrome's screencast makes them (8-bit RGB or RGBA, not interlaced), or null for any other. */
@@ -808,7 +808,7 @@ export class Page {
       }
       case 'wait': {
         const a = rest.join(' ')
-        if (/^\d+$/.test(a)) { const ms = Math.min(Number(a), 30_000); await sleep(ms); return { ok: true, text: `waited ${ms}ms${ms < Number(a) ? ' (the most one wait can be)' : ''}` } }
+        if (/^\d+$/.test(a)) { const ms = Math.min(Number(a), 30_000), from = Date.now(); await sleep(ms); this.rec?.waits.push({ from, to: Date.now() }); return { ok: true, text: `waited ${ms}ms${ms < Number(a) ? ' (the most one wait can be)' : ''}` } }
         for (let i = 0; i < 40; i++) { if (await this.evaluate<boolean>(WITHOUT_OVERLAYS(`document.body.innerText.includes(${JSON.stringify(a)}) || [...document.querySelectorAll('input, textarea')].some((e) => (e.value || '').includes(${JSON.stringify(a)}) || (e.placeholder || '').includes(${JSON.stringify(a)}))`))) return { ok: true, text: `"${a}" is on the page` }; await sleep(250) }
         return { ok: false, text: `"${a}" did not appear within 10s` }
       }
@@ -858,7 +858,7 @@ export class Page {
       const [rw, rh] = this.fixed ? this.size : [REC_W, REC_H]
       await this.setSize(rw, rh)
       await sleep(400) // let the page lay out at that size before the first frame
-      this.rec = { dir, frames: [], marks: [], wrote: 0, until: Infinity, extra: 0, actions: 0, ...opts }
+      this.rec = { dir, frames: [], waits: [], marks: [], wrote: 0, until: Infinity, extra: 0, actions: 0, ...opts }
       // The opening frame, before anything happens; then every frame the page paints.
       const first = await this.cdp<{ data: string }>('Page.captureScreenshot', { format: 'jpeg', quality: 82 }, 15_000).catch(() => null)
       if (first) { const file = path.join(dir, 'f-00000.jpg'); this.rec.frames.push({ file, t: Date.now() }); this.rec.wrote = Date.now(); fs.writeFileSync(file, Buffer.from(first.data, 'base64')) }
@@ -896,8 +896,10 @@ export class Page {
         return { ok: false, text: 'nothing was recorded: no action ran while recording, so the page never changed' }
       }
       // Each frame shows until the next; a long gap (the agent thinking) is cut to a beat, so the clip is the interactions, not the waiting.
-      const GAP = 0.6, MIN = 1 / 30, HOLD = 2.5 // each frame shows for the time until the next: real time, never slowed; a gap (the agent thinking) is cut to a beat
-      const durs = r.frames.map((f, i) => { const next = r.frames[i + 1]; return next ? Math.max(MIN, Math.min(GAP, (next.t - f.t) / 1000)) : 1.5 })
+      // A `wait` is stillness asked for, and a still page paints nothing during one, so the time it spans is never cut.
+      const GAP = 0.6, MIN = 1 / 30, HOLD = 2.5, LAST = 1.5 // each frame shows for the time until the next: real time, never slowed
+      const waited = (from: number, to: number) => r.waits.reduce((n, w) => n + Math.max(0, Math.min(to, w.to) - Math.max(from, w.from)), 0) / 1000
+      const durs = r.frames.map((f, i) => { const next = r.frames[i + 1]; return next ? Math.max(MIN, Math.min(GAP + waited(f.t, next.t), (next.t - f.t) / 1000)) : Math.max(LAST, waited(f.t, Infinity)) })
       // Every caption stays up for at least HOLD seconds: an agent that sets one and acts in the same breath leaves
       // nothing readable. The segment keeps its pace; its last frame holds for whatever time is missing.
       const bounds = [...r.marks, Infinity]

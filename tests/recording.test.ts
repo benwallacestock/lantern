@@ -95,6 +95,17 @@ test('a cut never hides a change: the page is filmed while it still looks differ
   const idle = kept(); await ok('record', 'stop')
   assert.ok(moving > idle * 1.5, `the whole slide was filmed (${moving} frames), and a spinner turning did not keep the camera rolling (${idle})`)
 })
+test('a wait stays in the video at its full length, though a still page paints nothing during it', async () => {
+  const secs = (out: string) => Number(/\(([\d.]+)s of video/.exec(out)?.[1])
+  const take = async (middle: string, end: string) => {
+    await ok('open', app.url + '/'); await ok('record', 'start'); await ok('hover', '300,300'); await ok('highlight', '#result')
+    await ok('wait', middle); await ok('highlight', 'off'); await ok('hover', '600,300'); await ok('wait', end)
+    return secs(await ok('record', 'stop'))
+  }
+  const short = await take('100', '100'), long = await take('2500', '3000')
+  // 2.4 for the wait in the middle and 1.4 for the last, which already holds for 1.5: both must count to get past 3.2.
+  assert.ok(long - short > 3.2, `waits on a still page are time in the video, the last one too: ${short}s without them, ${long}s with them`)
+})
 test('on camera a key is shown before it does anything, and its keycap stays clear of the caption', async () => {
   await ok('open', app.url + '/'); await ok('record', 'start'); await ok('record', 'caption', 'Leaving with Escape')
   await ok('hover', '700,850') // the pointer down by the caption, where the keycap used to hide behind it
