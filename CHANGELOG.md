@@ -2,6 +2,13 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/): since 1.0 the commands, flags and settings only change in a major version (before it, a minor bump could change behaviour). Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 1.0.1 — 2026-11-06
+
+### Fixed
+- Record: a wait stays in the video at its full length, so a mark no longer flashes past on a still page
+  - A still page paints nothing during a `wait`, so the gap was cut to 0.6s like an agent's thinking; the time a wait spans is now kept
+  - The demo skill says how long to hold a mark: `wait 2000` for a highlight, ring or arrow, `wait 2500` for a callout
+
 ## 1.0.0 — 2026-11-05
 
 ### Added

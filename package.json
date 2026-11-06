@@ -1,6 +1,6 @@
 {
   "name": "@benwallacestock/lantern",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Screenshots and demo videos for the pull requests your agent opens: framed before/after pairs, demos with captions and a visible pointer, and a real browser to check the change in.",
   "license": "MIT",
   "type": "module",
