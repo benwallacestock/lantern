@@ -16,6 +16,14 @@ lantern lets the agent show its work. That buys three things, in the order they 
 
 It's a command line because that's the best thing you can hand an agent: nothing to install into an editor, no extension, no window to keep open, just commands it already knows how to run. It also means it works where there is no window at all: a CI job, a cloud session, a bot on a server.
 
+## What it makes
+
+An agent made these on Wikipedia from one short script, as it would for a pull request: a 15-second demo with captions, a visible pointer and its thinking cut out, and a framed before/after pair. The article is Wikipedia's, under CC BY-SA 4.0.
+
+https://github.com/user-attachments/assets/4e623d22-9d77-41b2-9472-d19484d4e1a4
+
+![Wikipedia's Lantern article before and after switching to large text and dark mode](https://github.com/user-attachments/assets/0ee60491-a136-4ca5-9080-15f04ba14fac)
+
 ## Install
 
 Needs Node 22.18+ and a Chrome (Google Chrome, Chromium, Edge or Brave). ffmpeg is optional: videos assemble faster and smaller with it.
