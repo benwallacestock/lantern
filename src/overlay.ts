@@ -93,9 +93,48 @@ export const UI_JS = String.raw`(() => {
   const drop = (a) => { for (const n of a.nodes) n.remove(); anns.delete(a.id); if (a.el && a.el.classList && a.el.classList.contains('__l-anchor')) a.el.remove() }
   const keep = (a) => { a.id = nextId++; anns.set(a.id, a); for (const n of a.nodes) n.dataset.lantern = a.id; settle(a); if (!raf && anns.size) raf = requestAnimationFrame(tick); return a.id }
   const glowBox = (box, r) => place(box, r.left - PAD, r.top - PAD, r.width + 2 * PAD, r.height + 2 * PAD)
+  // The glowing box never runs through a line of text: an edge that would cross one is pulled in to clear it when
+  // there is room, or else let out to take the whole line in (a subtitle's box takes in the title sitting right on
+  // top of it), as long as that is a line's height or so. Measured once per place and size the element has.
+  const textOnEdges = (B) => {
+    const seen = new Set(), rects = []
+    const look = (x, y) => {
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return
+      let n = 0
+      for (const e of document.elementsFromPoint(x, y)) {
+        if (e.closest('.__lantern') || n++ > 3 || seen.has(e)) continue
+        seen.add(e)
+        for (const c of e.childNodes) {
+          if (c.nodeType !== 3 || !c.textContent.trim()) continue
+          const range = document.createRange(); range.selectNodeContents(c)
+          for (const q of range.getClientRects()) if (q.width && q.height) rects.push(q)
+        }
+      }
+    }
+    const along = (x0, y0, x1, y1) => { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(2, Math.min(60, Math.ceil(len / 10))); for (let i = 0; i <= n; i++) look(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n) }
+    along(B.l, B.t, B.r, B.t); along(B.l, B.b, B.r, B.b); along(B.l, B.t, B.l, B.b); along(B.r, B.t, B.r, B.b)
+    return rects
+  }
+  const fit = (st, r) => {
+    const key = [r.left, r.top, r.width, r.height].map(Math.round).join(':')
+    if (st.key === key) return st.r
+    const B = { l: r.left - PAD, t: r.top - PAD, r: r.right + PAD, b: r.bottom + PAD }, GROW = 48
+    for (let pass = 0; pass < 2; pass++) {
+      for (const q of textOnEdges(B)) {
+        if (q.right <= B.l || q.left >= B.r || q.bottom <= B.t || q.top >= B.b) continue
+        if (q.top < B.t) { if (q.bottom + 3 <= r.top - 3) B.t = q.bottom + 3; else if (r.top - q.top + 4 <= GROW) B.t = q.top - 4 }
+        if (q.bottom > B.b) { if (q.top - 3 >= r.bottom + 3) B.b = q.top - 3; else if (q.bottom + 4 - r.bottom <= GROW) B.b = q.bottom + 4 }
+        if (q.left < B.l) { if (q.right + 3 <= r.left - 3) B.l = q.right + 3; else if (r.left - q.left + 4 <= GROW) B.l = q.left - 4 }
+        if (q.right > B.r) { if (q.left - 3 >= r.right + 3) B.r = q.left - 3; else if (q.right + 4 - r.right <= GROW) B.r = q.right + 4 }
+      }
+    }
+    const left = B.l + PAD, top = B.t + PAD, right = B.r - PAD, bottom = B.b - PAD
+    st.key = key; st.r = { left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top }
+    return st.r
+  }
 
   const kinds = {
-    highlight: (el) => { const box = mk('div', '__l-highlight __l-glow'); return { el, nodes: [box], layout: (r) => glowBox(box, r) } },
+    highlight: (el) => { const box = mk('div', '__l-highlight __l-glow'), st = {}; return { el, nodes: [box], layout: (r) => glowBox(box, fit(st, r)) } },
     ring: (el) => {
       const ring = mk('div', '__l-ring')
       return { el, nodes: [ring], layout: (r) => { const pad = clamp(Math.min(r.width, r.height) * 0.3, 10, 28); place(ring, r.left - pad, r.top - pad, r.width + 2 * pad, r.height + 2 * pad) } }
@@ -135,7 +174,9 @@ export const UI_JS = String.raw`(() => {
       const line = mk('svg', '__l-callout-line __l-line', '<path fill="none" stroke-width="3" stroke-linecap="round"/><circle r="5"/>')
       const path = line.querySelector('path'), dot = line.querySelector('circle')
       let chosen = null, at = null
+      const st = {}
       return { el, nodes: [box, label, line], layout: (r) => {
+        r = fit(st, r)
         glowBox(box, r)
         const lw = label.offsetWidth, lh = label.offsetHeight, edge = PAD + 6, gap = 28
         const mid = (v, max) => clamp(v, 8, max)
