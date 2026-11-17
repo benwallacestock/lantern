@@ -69,6 +69,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-')
 const pngSize = (b: Buffer) => ({ w: b.readUInt32BE(16), h: b.readUInt32BE(20) })
 /** A JPEG's size, from its first frame header (SOF0/SOF2). */
+/** A frame is the page only when it has the viewport's shape (a crop or a whole-page shot never does). */
+export const viewportShaped = (jpeg: Buffer, size: [number, number]) => { const { w, h } = jpegSize(jpeg); return Math.abs(w / h - size[0] / size[1]) <= 0.02 }
 const jpegSize = (b: Buffer) => { let i = 2; while (i < b.length - 9) { if (b[i] !== 0xff) { i++; continue } const m = b[i + 1]; if (m === 0xc0 || m === 0xc2) return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) }; i += 2 + b.readUInt16BE(i + 2) } return { w: 2880, h: 1800 } }
 /** Commands that put input into the page, after which a navigation is checked for. */
 const INPUT = new Set(['click', 'dblclick', 'rightclick', 'fill', 'press', 'type', 'check', 'uncheck', 'select', 'drag'])
@@ -210,6 +212,10 @@ export class Page {
         const dh = params.metadata?.deviceHeight, dw = params.metadata?.deviceWidth
         if (dh && dw && (Math.abs(dh - this.size[1]) > 2 || Math.abs(dw - this.size[0]) > 2)) { this.resize(); break }
         const jpeg = Buffer.from(params.data, 'base64'), now = Date.now()
+        // The capture flag stops a screenshot's frames while it is taken, but Chrome can deliver one painted for it after the
+        // screencast restarts (seen on a busy CI runner: a 1440×106 frame, the shape of a crop). Only the viewport's shape is
+        // ever the page, so any other shape is dropped, whenever it comes.
+        if (!viewportShaped(jpeg, this.size)) break
         // Recording: keep the frame (at most ~12 a second). The page only paints when something changed, so a pause
         // in the agent's thinking leaves a gap in the timestamps, not a run of identical frames.
         const r = this.rec

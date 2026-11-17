@@ -7,6 +7,7 @@ import http from 'node:http'
 import net from 'node:net'
 import os from 'node:os'
 import { BIN, duration, firstLine, pause, pngSize, probe, setup, sh, type Run } from './helpers.ts'
+import { viewportShaped } from '../src/page.ts'
 
 let t: Awaited<ReturnType<typeof setup>>
 let app: { url: string; close: () => void }, home = '', proj = ''
@@ -205,6 +206,14 @@ test('two asking for the page at the same moment at the start get one page, and 
     const pages = (await ok('_cdp', 'Target.getTargets')).match(/"type":"page"/g) ?? []
     assert.equal(pages.length, 1, 'one tab, so nothing can sit in front of the page')
   } finally { for (const w of ws) w.close() }
+})
+test('only a frame with the viewport\'s shape is taken for the page: a crop or a whole-page shot is not, whenever it arrives', () => {
+  // The start of a JPEG as far as its size: SOI, then a baseline SOF0 with height and width.
+  const jpeg = (w: number, h: number) => Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, ...Array(12).fill(0)])
+  assert.ok(viewportShaped(jpeg(1440, 900), [1440, 900]) && viewportShaped(jpeg(2880, 1800), [1440, 900]), 'the page, at 1x or 2x')
+  assert.ok(viewportShaped(jpeg(390, 844), [390, 844]), 'a phone')
+  assert.ok(!viewportShaped(jpeg(1440, 106), [1440, 900]), 'a crop (the frame seen on CI)')
+  assert.ok(!viewportShaped(jpeg(1440, 6000), [1440, 900]), 'a whole-page shot')
 })
 test('a cropped or whole-page screenshot never reaches the watchers: every frame they get is the viewport', async () => {
   await ok('open', app.url + '/long')
