@@ -2,6 +2,11 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/): since 1.0 the commands, flags and settings only change in a major version (before it, a minor bump could change behaviour). Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 1.0.4 — 2026-11-17
+
+### Fixed
+- Annotate: words on a button's face, an image or a canvas still count as covering it, not only words over text
+
 ## 1.0.3 — 2026-11-17
 
 ### Fixed
