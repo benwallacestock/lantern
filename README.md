@@ -18,9 +18,11 @@ It's a command line because that's the best thing you can hand an agent: nothing
 
 ## What it makes
 
-An agent made these on Wikipedia from one short script, as it would for a pull request: a 15-second demo with captions, a visible pointer and its thinking cut out, and a framed before/after pair. The article is Wikipedia's, under CC BY-SA 4.0.
+An agent made these from short scripts, as it would for a pull request. First a demo: it sketches a flowchart in Excalidraw, picking tools by key, dragging out boxes and typing their labels, with captions, a visible pointer and its thinking cut out.
 
-https://github.com/user-attachments/assets/4e623d22-9d77-41b2-9472-d19484d4e1a4
+https://github.com/user-attachments/assets/c885b4fa-c076-4d0f-bc6a-32a85b943c71
+
+Then a framed before/after pair, from Wikipedia's Lantern article (the article is Wikipedia's, under CC BY-SA 4.0):
 
 ![Wikipedia's Lantern article before and after switching to large text and dark mode](https://github.com/user-attachments/assets/0ee60491-a136-4ca5-9080-15f04ba14fac)
 
