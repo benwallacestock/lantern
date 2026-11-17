@@ -2,6 +2,14 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/): since 1.0 the commands, flags and settings only change in a major version (before it, a minor bump could change behaviour). Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 1.0.3 — 2026-11-17
+
+### Fixed
+- Annotate: words beside a heading are no longer said to cover it; only words over its text count
+- Annotate: a box goes round exactly what was marked again, and the skills say to mark the whole card
+  - 1.0.2 let a box grow to take in text sitting on its edge, so it could mark more than was asked; that is undone
+  - Both skills say to mark the card or row that holds what you mean, not one line of text in it, and to look at the picture
+
 ## 1.0.2 — 2026-11-17
 
 ### Fixed
