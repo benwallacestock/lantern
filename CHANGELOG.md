@@ -2,6 +2,13 @@
 
 What changed in lantern, release by release, in the shape of [Keep a Changelog](https://keepachangelog.com/). Versions follow [semver](https://semver.org/): since 1.0 the commands, flags and settings only change in a major version (before it, a minor bump could change behaviour). Nobody writes this file: every push to main is a release, and the commit messages (in the [Conventional Commits](https://www.conventionalcommits.org/) shape, see AGENTS.md) decide the version and become the notes.
 
+## 1.0.2 — 2026-11-17
+
+### Fixed
+- Annotate: a highlight or callout box never runs through a line of text
+  - An edge that would cross text is pulled in to clear it when there is room, or let out to take in the whole line (a subtitle's box takes in the title sitting on it), up to about a line's height
+  - The demo skill says to mark the whole card or row rather than one line of it
+
 ## 1.0.1 — 2026-11-06
 
 ### Fixed
