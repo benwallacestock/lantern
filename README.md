@@ -22,9 +22,9 @@ An agent made these from short scripts, as it would for a pull request. First a 
 
 https://github.com/user-attachments/assets/c885b4fa-c076-4d0f-bc6a-32a85b943c71
 
-Then a framed before/after pair, from Wikipedia's Lantern article (the article is Wikipedia's, under CC BY-SA 4.0):
+Then a framed before/after pair of the same flowchart, colour-coded, with a callout on the change:
 
-![Wikipedia's Lantern article before and after switching to large text and dark mode](https://github.com/user-attachments/assets/0ee60491-a136-4ca5-9080-15f04ba14fac)
+![The flowchart before and after each stage was given its own colour](https://github.com/user-attachments/assets/71cf134c-8268-4edb-b96d-1eb58e9480ee)
 
 ## Install
 
