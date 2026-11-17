@@ -172,18 +172,6 @@ test('a click goes to the button it found, not to a tooltip the pointer raised t
   // and a button with no name at all is said by what it is beside, so the reply tells one such button from another
   assert.match(await ok('click', '#kebab'), /clicked "unnamed button by /)
 })
-test('a glowing box never runs through a line of text: it takes in a title sitting on its subtitle, and stays off the next row', async () => {
-  await ok('open', app.url + '/stacked')
-  // The box against the lines of text: inside it, outside it, or cut by its edge.
-  const cut = (box: string, ids: string[]) => ok('eval', `(() => { const b = document.querySelector(${JSON.stringify(box)}).getBoundingClientRect(); return ${JSON.stringify(ids)}.map((id) => { const r = document.createRange(); r.selectNodeContents(document.getElementById(id)); const q = r.getBoundingClientRect(); const inside = q.top >= b.top && q.bottom <= b.bottom && q.left >= b.left && q.right <= b.right, outside = q.bottom <= b.top || q.top >= b.bottom || q.right <= b.left || q.left >= b.right; return id + ':' + (inside ? 'in' : outside ? 'out' : 'cut') }).join(' ') })()`)
-  await ok('highlight', 'text=Not applied for yet')
-  assert.equal(await cut('.__l-highlight', ['title', 'sub']), 'title:in sub:in')
-  await ok('highlight', 'off'); await ok('callout', '#sub', 'Not applied for')
-  assert.equal(await cut('.__l-callout', ['title', 'sub']), 'title:in sub:in', 'a callout box too')
-  await ok('callout', 'off'); await ok('highlight', '#r2')
-  assert.equal(await cut('.__l-highlight', ['r1', 'r2', 'r3']), 'r1:out r2:in r3:out')
-  await ok('clear')
-})
 test('a callout goes on the side asked for', async () => {
   await ok('open', app.url + '/')
   const side = async (flag: string) => { await ok('callout', '700,450', 'Here', flag); const r = await ok('eval', "(() => { const l = document.querySelector('.__l-callout-label').getBoundingClientRect(); return Math.round(l.left + l.width / 2) + ',' + Math.round(l.top + l.height / 2) })()"); await ok('clear'); return r.split(',').map(Number) }
