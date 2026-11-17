@@ -172,6 +172,12 @@ test('a click goes to the button it found, not to a tooltip the pointer raised t
   // and a button with no name at all is said by what it is beside, so the reply tells one such button from another
   assert.match(await ok('click', '#kebab'), /clicked "unnamed button by /)
 })
+test('words beside a heading are not said to cover it: only words over its text count, not over the rest of its line', async () => {
+  await ok('open', app.url + '/long')
+  const at = await ok('eval', `(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('h2')); const q = r.getBoundingClientRect(); return [q.left, q.top, q.width, q.height].map(Math.round).join(',') })()`)
+  assert.doesNotMatch(await ok('callout', at, 'The first section', '--right'), /⚠ the words lie over/)
+  await ok('clear')
+})
 test('a callout goes on the side asked for', async () => {
   await ok('open', app.url + '/')
   const side = async (flag: string) => { await ok('callout', '700,450', 'Here', flag); const r = await ok('eval', "(() => { const l = document.querySelector('.__l-callout-label').getBoundingClientRect(); return Math.round(l.left + l.width / 2) + ',' + Math.round(l.top + l.height / 2) })()"); await ok('clear'); return r.split(',').map(Number) }
