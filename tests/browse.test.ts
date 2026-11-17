@@ -176,6 +176,10 @@ test('words beside a heading are not said to cover it: only words over its text 
   await ok('open', app.url + '/long')
   const at = await ok('eval', `(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('h2')); const q = r.getBoundingClientRect(); return [q.left, q.top, q.width, q.height].map(Math.round).join(',') })()`)
   assert.doesNotMatch(await ok('callout', at, 'The first section', '--right'), /⚠ the words lie over/)
+  // Words on a button's face still count, away from its label: the button is something you see, a heading's empty line is not.
+  await ok('clear'); await ok('open', app.url + '/tip'); await ok('eval', "document.getElementById('tipbox').remove()")
+  const face = await ok('eval', `(() => { const b = document.getElementById('use').getBoundingClientRect(); return [Math.round(b.left + 20), Math.round(b.top + 6), 10, 10].join(',') })()`)
+  assert.match(await ok('callout', face, 'A long label lying on the face of the button', '--below'), /⚠ the words lie over "Use new proposal"/)
   await ok('clear')
 })
 test('a callout goes on the side asked for', async () => {
